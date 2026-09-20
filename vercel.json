@@ -1,5 +1,0 @@
-{
-  "buildCommand": "pnpm --filter shared-types build && pnpm --filter web build",
-  "outputDirectory": ".next",
-  "framework": "nextjs"
-}
