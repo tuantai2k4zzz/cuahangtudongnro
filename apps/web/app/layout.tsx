@@ -10,6 +10,7 @@ import { SupportWidget } from '@/components/support/support-widget';
 import { MobileBottomNav } from '@/components/mobile-bottom-nav';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://cuahangtudongnro.vercel.app'),
   title: {
     default: `${SITE_CONFIG.name} — Nền Tảng Tool Game NRO Online Số 1`,
     template: `%s | ${SITE_CONFIG.name}`,
@@ -21,10 +22,24 @@ export const metadata: Metadata = {
   openGraph: {
     type: 'website',
     locale: 'vi_VN',
-    url: 'https://tudongnrott.com',
+    url: 'https://cuahangtudongnro.vercel.app',
     title: `${SITE_CONFIG.name} — Nền Tảng Tool Game NRO Online`,
     description: SITE_CONFIG.description,
     siteName: SITE_CONFIG.name,
+    images: [
+      {
+        url: '/og-image.jpg',
+        width: 1200,
+        height: 675,
+        alt: `${SITE_CONFIG.name} — Nền Tảng Tool Game NRO Online`,
+      },
+    ],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: `${SITE_CONFIG.name} — Nền Tảng Tool Game NRO Online`,
+    description: SITE_CONFIG.description,
+    images: ['/og-image.jpg'],
   },
   robots: {
     index: true,

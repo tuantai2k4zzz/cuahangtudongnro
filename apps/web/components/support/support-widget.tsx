@@ -63,6 +63,11 @@ export function SupportWidget() {
   const { user, isAuthenticated } = useAuth();
   const toast = useToast();
 
+  // If user is Admin, they manage tickets from /admin dashboard and do not need the floating customer widget
+  if (user?.role === 'ADMIN') {
+    return null;
+  }
+
   // Polling / fetching ticket messages from backend
   const syncTicket = React.useCallback(
     async (ticketId: string, isSilent = false) => {
@@ -259,20 +264,6 @@ export function SupportWidget() {
           setCurrentTicketId(newId);
           setActiveTicket(created.data);
           lastAdminMsgCountRef.current = 0;
-
-          // Dispatch notification to Admin
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(
-              new CustomEvent('add-system-notification', {
-                detail: {
-                  title: `Ticket hỗ trợ mới [${created.data.ticketCode}]`,
-                  content: `${user?.fullName || 'Khách hàng'}: ${userMsg}`,
-                  type: 'SUPPORT',
-                  link: '/admin',
-                },
-              })
-            );
-          }
         }
       }
     } catch (err: any) {
