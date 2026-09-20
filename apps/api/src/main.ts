@@ -27,7 +27,7 @@ async function bootstrap() {
     // CORS configuration
     const clientUrl = process.env.CLIENT_URL || 'http://localhost:3000';
     app.enableCors({
-      origin: [clientUrl, 'http://localhost:3000', 'https://cuahangtudongnro.vercel.app'],
+      origin: [clientUrl, 'http://localhost:3000', 'https://cuahangtudongnro.vercel.app', /\.vercel\.app$/],
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-signature'],
