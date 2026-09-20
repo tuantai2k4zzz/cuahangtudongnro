@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "apps/api/api/index.js": {
+      "includeFiles": "{apps/api/dist/**,apps/api/api/dist/**}"
+    }
+  }
+}

@@ -21,33 +21,26 @@ module.exports = async function (req, res) {
       } catch (e) {
         console.warn('Optional require @tudongnro/shared-types:', e.message);
       }
-      const main = require('../dist/main');
+
+      let main;
+      try {
+        main = require('./dist/main');
+      } catch (e1) {
+        try {
+          main = require('../dist/main');
+        } catch (e2) {
+          throw new Error(`Cannot find main in ./dist/main (${e1.message}) or ../dist/main (${e2.message})`);
+        }
+      }
       cachedHandler = main.default || main;
     }
     return await cachedHandler(req, res);
   } catch (err) {
     console.error('Vercel API Handler Error:', err);
-    const fs = require('fs');
-    const path = require('path');
-    
-    let taskFiles = [];
-    let apiFiles = [];
-    try {
-      taskFiles = fs.readdirSync('/var/task');
-    } catch (e) { taskFiles = [e.message]; }
-    try {
-      apiFiles = fs.readdirSync(path.resolve(__dirname, '..'));
-    } catch (e) { apiFiles = [e.message]; }
-
     return res.status(500).json({
       error: 'Vercel API Handler Failed',
       message: err.message,
       stack: err.stack,
-      debug_fs: {
-        __dirname,
-        taskFiles,
-        apiFiles,
-      },
       env_check: {
         has_mongodb: !!process.env.MONGODB_URI,
         has_jwt_access: !!process.env.JWT_ACCESS_SECRET,
