@@ -88,7 +88,12 @@ if (process.env.VERCEL) {
 export default async function handler(req: any, res: any) {
   try {
     const expressApp = await bootstrap();
-    expressApp(req, res);
+    return new Promise((resolve, reject) => {
+      res.on('finish', resolve);
+      res.on('close', resolve);
+      res.on('error', reject);
+      expressApp(req, res);
+    });
   } catch (error: any) {
     console.error('NestJS Bootstrap Error:', error);
     res.status(500).json({ error: 'Internal Server Error', details: error.message || String(error) });
