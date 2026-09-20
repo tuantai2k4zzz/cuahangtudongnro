@@ -1,7 +1,19 @@
+const Module = require('module');
+const path = require('path');
+
+// Hook Module._resolveFilename so any require('@tudongnro/shared-types') resolves to our local file
+const originalResolve = Module._resolveFilename;
+Module._resolveFilename = function (request, parent, isMain, options) {
+  if (request === '@tudongnro/shared-types') {
+    return path.join(__dirname, 'shared-types.js');
+  }
+  return originalResolve.call(this, request, parent, isMain, options);
+};
+
 let cachedHandler;
 
 module.exports = async function (req, res) {
-  // 1. CORS Headers trực tiếp tại Vercel Function: Ngăn chặn triệt để lỗi PreflightMissingAllowOriginHeader
+  // 1. CORS Headers trực tiếp tại Vercel Function
   const origin = req.headers.origin || '*';
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -16,12 +28,6 @@ module.exports = async function (req, res) {
   try {
     if (!cachedHandler) {
       require('reflect-metadata');
-      try {
-        require('@tudongnro/shared-types');
-      } catch (e) {
-        console.warn('Optional require @tudongnro/shared-types:', e.message);
-      }
-
       let main;
       try {
         main = require('./dist/main');
