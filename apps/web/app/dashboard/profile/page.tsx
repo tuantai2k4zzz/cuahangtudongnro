@@ -12,17 +12,35 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { MOCK_USER } from '@/lib/mock-data';
+import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/contexts/toast-context';
 import { formatDate } from '@/lib/utils';
 
 export default function DashboardProfilePage() {
-  const [fullName, setFullName] = React.useState(MOCK_USER.fullName);
+  const { user } = useAuth();
+  const toast = useToast();
+  const [fullName, setFullName] = React.useState(user?.fullName || '');
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [newPassword, setNewPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = React.useState(false);
   const [passwordSuccessMsg, setPasswordSuccessMsg] = React.useState('');
   const [passwordErrorMsg, setPasswordErrorMsg] = React.useState('');
+
+  React.useEffect(() => {
+    if (user?.fullName) {
+      setFullName(user.fullName);
+    }
+  }, [user]);
+
+  const handleUpdateProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    toast.showToast({
+      type: 'SUCCESS',
+      title: 'Đã lưu thông tin',
+      message: 'Thông tin hồ sơ cá nhân đã được cập nhật.',
+    });
+  };
 
   const handleUpdatePassword = (e: React.FormEvent) => {
     e.preventDefault();
@@ -68,10 +86,10 @@ export default function DashboardProfilePage() {
             <User className="h-4 w-4 text-cyan-400" /> Thông Tin Cá Nhân
           </div>
 
-          <div className="space-y-4 text-xs">
+          <form onSubmit={handleUpdateProfile} className="space-y-4 text-xs">
             <div className="space-y-1.5">
               <label className="text-slate-400 font-semibold">Địa chỉ Email (Không đổi)</label>
-              <Input value={MOCK_USER.email} disabled className="opacity-70" />
+              <Input value={user?.email || 'member@tudongnro.com'} disabled className="opacity-70" />
             </div>
 
             <div className="space-y-1.5">
@@ -79,29 +97,30 @@ export default function DashboardProfilePage() {
               <Input
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
+                placeholder="Nhập họ và tên của bạn"
               />
             </div>
 
             <div className="space-y-1.5">
               <label className="text-slate-400 font-semibold">Vai trò hệ thống</label>
               <div>
-                <Badge variant="default">{MOCK_USER.role}</Badge>
+                <Badge variant="default">{user?.role || 'CUSTOMER'}</Badge>
               </div>
             </div>
 
             <div className="space-y-1.5">
               <label className="text-slate-400 font-semibold">Ngày tham gia</label>
               <div className="text-slate-300 font-mono">
-                {formatDate(MOCK_USER.createdAt)}
+                {user?.createdAt ? formatDate(user.createdAt) : 'Hôm nay'}
               </div>
             </div>
 
             <div className="pt-2">
-              <Button size="sm" variant="default" className="text-xs">
+              <Button size="sm" variant="default" className="text-xs" type="submit">
                 Lưu Thay Đổi Thông Tin
               </Button>
             </div>
-          </div>
+          </form>
         </div>
 
         {/* Change Password Card */}

@@ -39,6 +39,19 @@ export class ProductsController {
     return this.productsService.findBySlug(slug);
   }
 
+  @Get('admin/all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lấy tất cả sản phẩm bao gồm nháp (Admin Only)' })
+  async findAllAdmin(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+    @Query('category') category?: string,
+  ) {
+    return this.productsService.findAllAdmin({ search, status, category });
+  }
+
   @Post('admin')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

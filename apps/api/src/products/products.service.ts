@@ -57,6 +57,25 @@ export class ProductsService implements OnModuleInit {
     return product;
   }
 
+  async findAllAdmin(query: { search?: string; status?: string; category?: string }) {
+    const filter: any = {};
+    if (query.status && query.status !== 'ALL') {
+      filter.status = query.status;
+    }
+    if (query.category && query.category !== 'ALL') {
+      filter.category = query.category;
+    }
+    if (query.search) {
+      filter.$or = [
+        { name: { $regex: query.search, $options: 'i' } },
+        { slug: { $regex: query.search, $options: 'i' } },
+        { sku: { $regex: query.search, $options: 'i' } },
+        { tagline: { $regex: query.search, $options: 'i' } },
+      ];
+    }
+    return this.productModel.find(filter).sort({ sortOrder: 1, createdAt: -1 }).exec();
+  }
+
   async findById(id: string) {
     const product = await this.productModel.findById(id);
     if (!product) {
@@ -66,17 +85,48 @@ export class ProductsService implements OnModuleInit {
   }
 
   async create(dto: CreateProductDto) {
-    const existing = await this.productModel.findOne({ slug: dto.slug.toLowerCase() });
-    if (existing) {
+    const existingSlug = await this.productModel.findOne({ slug: dto.slug.toLowerCase() });
+    if (existingSlug) {
       throw new ConflictException(`Slug '${dto.slug}' đã tồn tại`);
+    }
+    if (dto.sku) {
+      const existingSku = await this.productModel.findOne({ sku: dto.sku.toUpperCase() });
+      if (existingSku) {
+        throw new ConflictException(`Mã SKU '${dto.sku}' đã tồn tại`);
+      }
     }
     return this.productModel.create({
       ...dto,
       slug: dto.slug.toLowerCase(),
+      sku: dto.sku ? dto.sku.toUpperCase() : undefined,
+      salesCount: 0,
+      viewCount: 0,
+      lastUpdated: new Date(),
     });
   }
 
   async update(id: string, updateData: Partial<Product>) {
+    if (updateData.slug) {
+      const existing = await this.productModel.findOne({
+        slug: updateData.slug.toLowerCase(),
+        _id: { $ne: id },
+      });
+      if (existing) {
+        throw new ConflictException(`Slug '${updateData.slug}' đã tồn tại`);
+      }
+      updateData.slug = updateData.slug.toLowerCase();
+    }
+    if (updateData.sku) {
+      const existingSku = await this.productModel.findOne({
+        sku: updateData.sku.toUpperCase(),
+        _id: { $ne: id },
+      });
+      if (existingSku) {
+        throw new ConflictException(`Mã SKU '${updateData.sku}' đã tồn tại`);
+      }
+      updateData.sku = updateData.sku.toUpperCase();
+    }
+    updateData.lastUpdated = new Date();
     const updated = await this.productModel.findByIdAndUpdate(id, updateData, { new: true });
     if (!updated) {
       throw new NotFoundException('Không tìm thấy sản phẩm để cập nhật');

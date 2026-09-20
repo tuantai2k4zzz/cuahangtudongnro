@@ -303,14 +303,13 @@ export const MOCK_PRODUCTS: IProduct[] = [
 ];
 
 export const MOCK_USER: IUser = {
-  id: 'usr_customer_1',
-  email: 'khachhang@gmail.com',
-  fullName: 'Trần Văn Kiên',
+  id: '',
+  email: '',
+  fullName: '',
   role: UserRole.CUSTOMER,
   status: UserStatus.ACTIVE,
-  createdAt: '2026-03-01T10:00:00.000Z',
-  updatedAt: '2026-09-18T14:20:00.000Z',
-  lastLoginAt: '2026-09-20T08:30:00.000Z',
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
 };
 
 export const MOCK_ADMIN: IUser = {
@@ -473,9 +472,20 @@ export const MOCK_ADMIN_STATS: IAdminOverviewStats = {
   totalRevenue: 124500000,
   monthlyRevenue: 28400000,
   todayRevenue: 2150000,
+  rangeRevenue: 124500000,
   totalOrders: 1840,
-  pendingOrders: 12,
+  paidOrdersCount: 1680,
+  pendingOrdersCount: 12,
+  cancelledOrdersCount: 148,
+  totalLicenses: 986,
   activeLicenses: 986,
+  expiredLicenses: 120,
   totalUsers: 2450,
+  newUsersRange: 38,
+  totalProducts: 4,
+  topProducts: [],
+  conversionRate: 91.3,
+  updatedAt: new Date().toISOString(),
+  pendingOrders: 12,
   newUsersToday: 38,
 };

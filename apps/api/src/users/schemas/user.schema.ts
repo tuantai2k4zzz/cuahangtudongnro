@@ -4,7 +4,18 @@ import { UserRole, UserStatus } from '@tudongnro/shared-types';
 
 export type UserDocument = User & Document;
 
-@Schema({ timestamps: true, collection: 'users' })
+@Schema({
+  timestamps: true,
+  collection: 'users',
+  toJSON: {
+    virtuals: true,
+    transform: (_doc, ret: any) => {
+      ret.id = ret._id.toString();
+      return ret;
+    },
+  },
+  toObject: { virtuals: true },
+})
 export class User {
   @Prop({ required: true, unique: true, index: true, lowercase: true, trim: true })
   email: string;
@@ -23,6 +34,9 @@ export class User {
 
   @Prop({ type: String, enum: UserStatus, default: UserStatus.ACTIVE })
   status: UserStatus;
+
+  @Prop({ default: 0, min: 0 })
+  balance: number;
 
   @Prop({ default: null, select: false })
   refreshTokenHash: string;

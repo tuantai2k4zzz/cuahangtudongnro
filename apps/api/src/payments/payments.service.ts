@@ -9,9 +9,11 @@ import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PaymentTransaction, PaymentTransactionDocument } from './schemas/payment-transaction.schema';
+import { DepositTransaction, DepositTransactionDocument } from './schemas/deposit.schema';
+import { User, UserDocument } from '../users/schemas/user.schema';
 import { OrdersService } from '../orders/orders.service';
 import { Order, OrderDocument } from '../orders/schemas/order.schema';
-import { PaymentMethod, OrderStatus } from '@tudongnro/shared-types';
+import { PaymentMethod, OrderStatus, DepositStatus } from '@tudongnro/shared-types';
 
 @Injectable()
 export class PaymentsService {
@@ -20,8 +22,12 @@ export class PaymentsService {
   constructor(
     @InjectModel(PaymentTransaction.name)
     private paymentTxModel: Model<PaymentTransactionDocument>,
+    @InjectModel(DepositTransaction.name)
+    private depositTxModel: Model<DepositTransactionDocument>,
     @InjectModel(Order.name)
     private orderModel: Model<OrderDocument>,
+    @InjectModel(User.name)
+    private userModel: Model<UserDocument>,
     private ordersService: OrdersService,
     private configService: ConfigService,
   ) {}
@@ -65,6 +71,75 @@ export class PaymentsService {
     };
   }
 
+  // --- Deposit (Nạp Tiền Vào Ví Coin) ---
+  async createDeposit(userId: string, userEmail: string, amount: number) {
+    if (!amount || amount < 10000) {
+      throw new BadRequestException('Số tiền nạp tối thiểu là 10.000 VNĐ');
+    }
+
+    const randomCode = Math.floor(10000 + Math.random() * 90000);
+    const depositCode = `NAP-${randomCode}`;
+
+    const bankCode = this.configService.get<string>('BANK_CODE', 'MB');
+    const accountNumber = this.configService.get<string>('BANK_ACCOUNT', '999988886666');
+    const accountHolder = this.configService.get<string>('BANK_ACCOUNT_NAME', 'NGUYEN VAN ADMIN');
+
+    const qrUrl = `https://api.vietqr.io/image/${bankCode}-${accountNumber}-compact2.png?amount=${amount}&addInfo=${depositCode}&accountName=${encodeURIComponent(accountHolder)}`;
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 mins to pay
+
+    const deposit = await this.depositTxModel.create({
+      depositCode,
+      userId: new Types.ObjectId(userId),
+      userEmail: userEmail.toLowerCase(),
+      amount,
+      coins: amount, // 1 VNĐ = 1 Coin
+      status: DepositStatus.PENDING,
+      paymentMethod: PaymentMethod.VIETQR,
+      qrUrl,
+      bankInfo: {
+        bankCode,
+        accountNumber,
+        accountHolder,
+      },
+      memo: depositCode,
+      expiresAt,
+    });
+
+    return {
+      depositId: deposit._id,
+      depositCode: deposit.depositCode,
+      amount: deposit.amount,
+      coins: deposit.coins,
+      bankInfo: deposit.bankInfo,
+      memo: depositCode,
+      qrUrl,
+      expiresAt,
+    };
+  }
+
+  async checkDepositStatus(depositCode: string) {
+    const deposit = await this.depositTxModel.findOne({ depositCode: depositCode.toUpperCase() });
+    if (!deposit) {
+      throw new NotFoundException('Không tìm thấy giao dịch nạp tiền');
+    }
+    return {
+      depositCode: deposit.depositCode,
+      amount: deposit.amount,
+      coins: deposit.coins,
+      status: deposit.status,
+      paidAt: deposit.paidAt,
+    };
+  }
+
+  async getMyDeposits(userId: string) {
+    return this.depositTxModel
+      .find({ userId: new Types.ObjectId(userId) })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
   async handleWebhook(gateway: string, payload: any, signature?: string) {
     this.logger.log(`Received Webhook from [${gateway}]: ${JSON.stringify(payload)}`);
 
@@ -100,11 +175,63 @@ export class PaymentsService {
       return { success: true, message: 'Giao dịch đã được xử lý trước đó (Idempotency OK)' };
     }
 
-    // 4. Find matching order code from content (e.g. content contains "NRO-83921")
+    // 4. Check whether it is a Deposit (NAP-XXXXX) or Direct Tool Order (NRO-XXXXX)
+    const depositCodeMatch = content.match(/NAP-\d{5}/i);
     const orderCodeMatch = content.match(/NRO-\d{5}/i);
+
+    // --- CASE A: DEPOSIT TO WALLET (Nạp tiền vào Ví Coin) ---
+    if (depositCodeMatch) {
+      const depositCode = depositCodeMatch[0].toUpperCase();
+      const deposit = await this.depositTxModel.findOne({ depositCode });
+
+      if (!deposit) {
+        this.logger.warn(`Deposit request with code ${depositCode} not found in DB`);
+        return { success: false, message: `Không tìm thấy yêu cầu nạp tiền ${depositCode}` };
+      }
+
+      if (deposit.status === DepositStatus.SUCCESS) {
+        return { success: true, message: 'Yêu cầu nạp tiền này đã được xử lý trước đó' };
+      }
+
+      if (amount < deposit.amount) {
+        this.logger.warn(
+          `Underpayment for deposit ${depositCode}: Expected ${deposit.amount}, got ${amount}`,
+        );
+        return { success: false, message: 'Số tiền chuyển khoản thấp hơn số tiền nạp' };
+      }
+
+      deposit.status = DepositStatus.SUCCESS;
+      deposit.paidAt = new Date();
+      deposit.transactionId = String(transactionId);
+      deposit.rawPayload = payload;
+      await deposit.save();
+
+      // Cộng số dư ví Coin cho User
+      await this.userModel.findByIdAndUpdate(deposit.userId, {
+        $inc: { balance: deposit.coins },
+      });
+
+      // Ghi nhận transaction
+      await this.paymentTxModel.create({
+        gateway: (gateway.toUpperCase() as PaymentMethod) || PaymentMethod.VIETQR,
+        transactionId: String(transactionId),
+        amount,
+        status: 'SUCCESS',
+        signature,
+        rawPayload: payload,
+        isProcessed: true,
+      });
+
+      return {
+        success: true,
+        message: `Nạp tiền thành công! Đã cộng +${deposit.coins} Coin vào tài khoản`,
+        deposit,
+      };
+    }
+
+    // --- CASE B: DIRECT TOOL ORDER (Mua ngay trực tiếp cấp License) ---
     if (!orderCodeMatch) {
-      this.logger.warn(`Cannot extract orderCode from transfer content: "${content}"`);
-      // Record transaction for manual review
+      this.logger.warn(`Cannot extract orderCode or depositCode from transfer content: "${content}"`);
       await this.paymentTxModel.create({
         gateway: gateway as PaymentMethod,
         transactionId: String(transactionId),
@@ -113,7 +240,7 @@ export class PaymentsService {
         rawPayload: payload,
         isProcessed: false,
       });
-      return { success: true, message: 'Ghi nhận giao dịch nhưng không tìm thấy mã đơn hàng khớp' };
+      return { success: true, message: 'Ghi nhận giao dịch nhưng không tìm thấy mã đơn/nạp khớp' };
     }
 
     const orderCode = orderCodeMatch[0].toUpperCase();
@@ -132,10 +259,10 @@ export class PaymentsService {
       return { success: false, message: 'Số tiền chuyển khoản thấp hơn giá trị đơn hàng' };
     }
 
-    // 5. Complete Order and issue License
+    // Complete Order and issue License
     const result = await this.ordersService.completeOrder(order._id.toString(), String(transactionId));
 
-    // 6. Record processed transaction
+    // Record processed transaction
     await this.paymentTxModel.create({
       orderId: order._id,
       gateway: (gateway.toUpperCase() as PaymentMethod) || PaymentMethod.VIETQR,

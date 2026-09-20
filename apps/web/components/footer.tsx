@@ -1,6 +1,6 @@
 import * as React from 'react';
 import Link from 'next/link';
-import { Gamepad2, ShieldCheck, Zap, Headphones, ExternalLink } from 'lucide-react';
+import { Gamepad2, ShieldCheck, Zap, Headphones, ExternalLink, Activity, FileText } from 'lucide-react';
 import { SITE_CONFIG } from '@/lib/constants';
 
 export function Footer() {
@@ -79,20 +79,44 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/policy" className="hover:text-cyan-400 transition-colors flex items-center gap-1">
+                  <FileText className="h-3.5 w-3.5 text-cyan-400" /> Chính Sách & Bảo Hành 1 Đổi 1
+                </Link>
+              </li>
+              <li>
+                <Link href="/status" className="hover:text-cyan-400 transition-colors flex items-center gap-1">
+                  <Activity className="h-3.5 w-3.5 text-emerald-400" /> Trạng Thái Hệ Thống (Uptime)
+                </Link>
+              </li>
+              <li>
                 <a
-                  href={SITE_CONFIG.supportTelegram}
+                  href="https://t.me/tudongnrott_support"
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-1 hover:text-cyan-400 transition-colors text-cyan-400"
                 >
-                  <Headphones className="h-3.5 w-3.5" /> Kênh Telegram Hỗ Trợ <ExternalLink className="h-3 w-3" />
+                  <Headphones className="h-3.5 w-3.5" /> Telegram Kỹ Thuật <ExternalLink className="h-3 w-3" />
                 </a>
               </li>
               <li>
-                <span className="text-slate-400">Email: {SITE_CONFIG.supportEmail}</span>
+                <a
+                  href="https://www.facebook.com/share/1BFtijXXpU/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-1 hover:text-blue-400 transition-colors text-slate-300"
+                >
+                  <ExternalLink className="h-3.5 w-3.5 text-blue-400" /> Facebook Hỗ Trợ 24/7
+                </a>
               </li>
               <li>
-                <span className="text-slate-400">Thời gian hỗ trợ: 08:00 - 23:00 hàng ngày</span>
+                <a
+                  href="https://zalo.me/0983542830"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:text-cyan-400 transition-colors text-slate-400"
+                >
+                  Hotline/Zalo: <span className="text-white font-medium">0983.542.830</span>
+                </a>
               </li>
             </ul>
           </div>
@@ -105,15 +129,19 @@ export function Footer() {
             <p className="text-xs text-slate-400 leading-relaxed">
               Mỗi bản quyền chỉ sử dụng trên 01 thiết bị duy nhất. Mọi hành vi cố tình bẻ khóa hoặc chia sẻ key công khai sẽ bị hệ thống tự động khóa vĩnh viễn không hoàn tiền.
             </p>
-            <div className="mt-4 rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-[11px] text-slate-400">
-              <span className="text-emerald-400 font-bold">Hệ Thống Trực Tuyến:</span> 100% Tự động cấp key 24/7 ngay sau khi quét mã thanh toán.
+            <div className="mt-4 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-[11px] text-slate-400 space-y-1">
+              <div className="text-emerald-400 font-bold flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+                Hệ Thống Trực Tuyến 24/7
+              </div>
+              <div>Cấp key tự động sau 3 giây quét mã VietQR.</div>
             </div>
           </div>
         </div>
 
         <div className="mt-8 border-t border-slate-900 pt-6 flex flex-col md:flex-row items-center justify-between text-xs text-slate-500 gap-4">
           <p>© 2026 {SITE_CONFIG.name}. Tất cả quyền được bảo lưu.</p>
-          <p className="text-[11px]">Designed with Dark Gaming UI Standards & Next.js 16 App Router.</p>
+          <p className="text-[11px]">Nền tảng thương mại điện tử Tool Game NRO Online chuyên nghiệp.</p>
         </div>
       </div>
     </footer>

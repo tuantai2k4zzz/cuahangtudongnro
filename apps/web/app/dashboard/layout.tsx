@@ -8,15 +8,18 @@ import {
   KeyRound,
   Package,
   User,
+  Wallet,
+  Coins,
   ExternalLink,
   ShieldCheck,
   Headphones,
 } from 'lucide-react';
-import { MOCK_USER } from '@/lib/mock-data';
+import { useAuth } from '@/contexts/auth-context';
 import { SITE_CONFIG } from '@/lib/constants';
 
 const DASHBOARD_NAV = [
   { label: 'Tổng Quan', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'Nạp Tiền Vào Ví', href: '/dashboard/deposit', icon: Wallet },
   { label: 'Bản Quyền Của Tôi', href: '/dashboard/licenses', icon: KeyRound },
   { label: 'Lịch Sử Đơn Hàng', href: '/dashboard/orders', icon: Package },
   { label: 'Cài Đặt Tài Khoản', href: '/dashboard/profile', icon: User },
@@ -28,6 +31,11 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const { user } = useAuth();
+
+  const displayName = user?.fullName || 'Thành Viên';
+  const displayEmail = user?.email || 'member@tudongnro.com';
+  const avatarLetter = (displayName.charAt(0) || 'U').toUpperCase();
 
   return (
     <div className="min-h-screen bg-[#080B12] py-8">
@@ -39,18 +47,37 @@ export default function DashboardLayout({
             <div className="rounded-2xl border border-slate-800 bg-[#0F1523] p-5 space-y-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-cyan-400 to-blue-600 font-bold text-slate-950 text-base">
-                  {MOCK_USER.fullName.charAt(0)}
+                  {avatarLetter}
                 </div>
                 <div className="overflow-hidden">
                   <div className="font-bold text-white text-sm truncate">
-                    {MOCK_USER.fullName}
+                    {displayName}
                   </div>
                   <div className="text-[11px] text-slate-400 truncate">
-                    {MOCK_USER.email}
+                    {displayEmail}
                   </div>
                   <span className="inline-block rounded bg-cyan-500/10 px-1.5 py-0.5 text-[9px] font-bold text-cyan-400 border border-cyan-500/30 mt-1">
-                    Thành Viên Đã Xác Thực
+                    {user?.role === 'ADMIN' ? 'Quản Trị Viên' : 'Thành Viên Đã Xác Thực'}
                   </span>
+                </div>
+              </div>
+
+              {/* Wallet Balance Widget */}
+              <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                <div className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <Coins className="h-3 w-3 text-cyan-400" />
+                  <span>Số dư ví:</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="font-mono font-bold text-cyan-400 text-xs">
+                    {(user?.balance || 0).toLocaleString('vi-VN')} Coin
+                  </span>
+                  <Link
+                    href="/dashboard/deposit"
+                    className="rounded bg-cyan-500/20 px-1.5 py-0.5 text-[9px] font-bold text-cyan-300 hover:bg-cyan-500/30 transition-colors cursor-pointer"
+                  >
+                    + Nạp
+                  </Link>
                 </div>
               </div>
             </div>

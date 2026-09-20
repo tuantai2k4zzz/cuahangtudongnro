@@ -46,4 +46,32 @@ export class PaymentsController {
   ) {
     return this.paymentsService.handleWebhook(gateway, payload, signature);
   }
+
+  // --- Nạp tiền vào tài khoản (Ví Coin) ---
+  @Post('deposit/create')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Khởi tạo yêu cầu nạp tiền vào ví Coin' })
+  async createDeposit(
+    @CurrentUser('userId') userId: string,
+    @CurrentUser('email') userEmail: string,
+    @Body('amount') amount: number,
+  ) {
+    return this.paymentsService.createDeposit(userId, userEmail, Number(amount));
+  }
+
+  @Get('deposit/status/:code')
+  @ApiOperation({ summary: 'Kiểm tra trạng thái yêu cầu nạp tiền (Polling từ modal nạp)' })
+  async checkDepositStatus(@Param('code') code: string) {
+    return this.paymentsService.checkDepositStatus(code);
+  }
+
+  @Get('deposit/me')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Lịch sử nạp tiền của tôi' })
+  async getMyDeposits(@CurrentUser('userId') userId: string) {
+    return this.paymentsService.getMyDeposits(userId);
+  }
 }
+

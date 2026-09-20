@@ -8,12 +8,14 @@ import { OrdersModule } from './orders/orders.module';
 import { LicensesModule } from './licenses/licenses.module';
 import { PaymentsModule } from './payments/payments.module';
 import { AdminModule } from './admin/admin.module';
+import { ReviewsModule } from './reviews/reviews.module';
+import { TicketsModule } from './tickets/tickets.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ['.env', 'apps/api/.env'],
     }),
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
@@ -37,6 +39,8 @@ import { AdminModule } from './admin/admin.module';
     LicensesModule,
     PaymentsModule,
     AdminModule,
+    ReviewsModule,
+    TicketsModule,
   ],
 })
 export class AppModule {}

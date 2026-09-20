@@ -6,9 +6,14 @@ import { useRouter } from 'next/navigation';
 import { Gamepad2, Lock, Mail, User, ArrowRight, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/contexts/toast-context';
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { register } = useAuth();
+  const toast = useToast();
+
   const [fullName, setFullName] = React.useState('');
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
@@ -17,7 +22,7 @@ export default function RegisterPage() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -39,10 +44,16 @@ export default function RegisterPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    const result = await register(fullName, email, password);
+    setIsLoading(false);
+
+    if (result.success) {
+      toast.success('Đăng ký tài khoản thành công! Đang chuyển hướng vào Dashboard...');
       router.push('/dashboard');
-    }, 1200);
+    } else {
+      setErrorMsg(result.error || 'Đăng ký thất bại. Email có thể đã được sử dụng.');
+      toast.error('Không thể tạo tài khoản. Vui lòng kiểm tra lại thông tin.');
+    }
   };
 
   return (
@@ -133,10 +144,10 @@ export default function RegisterPage() {
               id="terms"
               checked={agreeTerms}
               onChange={(e) => setAgreeTerms(e.target.checked)}
-              className="mt-0.5 rounded border-slate-700 bg-slate-900 text-cyan-400 focus:ring-cyan-400"
+              className="mt-0.5 rounded border-slate-700 bg-slate-900 text-cyan-400 focus:ring-cyan-400 cursor-pointer"
             />
-            <label htmlFor="terms" className="text-[11px] text-slate-400 leading-tight">
-              Tôi đồng ý với <span className="text-cyan-400 underline">Điều khoản sử dụng</span> và cam kết không chia sẻ License Key cho người khác.
+            <label htmlFor="terms" className="text-[11px] text-slate-400 leading-tight cursor-pointer">
+              Tôi đồng ý với <Link href="/policy" className="text-cyan-400 underline">Chính sách dịch vụ</Link> và cam kết không chia sẻ License Key cho người khác.
             </label>
           </div>
 

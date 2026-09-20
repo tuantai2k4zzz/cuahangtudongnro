@@ -13,11 +13,14 @@ import { LicensesService } from '../licenses/licenses.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderStatus, PaymentMethod } from '@tudongnro/shared-types';
 
+import { User, UserDocument } from '../users/schemas/user.schema';
+
 @Injectable()
 export class OrdersService {
   constructor(
     @InjectModel(Order.name) private orderModel: Model<OrderDocument>,
     @InjectModel(Product.name) private productModel: Model<ProductDocument>,
+    @InjectModel(User.name) private userModel: Model<UserDocument>,
     private licensesService: LicensesService,
   ) {}
 
@@ -39,6 +42,71 @@ export class OrdersService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 mins to pay
 
+    // --- CASE A: Thanh toán bằng số dư Ví Coin (Trừ thẳng nhận tool ngay) ---
+    if (dto.paymentMethod === PaymentMethod.WALLET) {
+      const user = await this.userModel.findById(userId);
+      if (!user) {
+        throw new NotFoundException('Người dùng không tồn tại');
+      }
+
+      const currentBalance = user.balance || 0;
+      if (currentBalance < selectedPlan.price) {
+        throw new BadRequestException(
+          `Số dư tài khoản không đủ (${currentBalance.toLocaleString('vi-VN')} Coin). Bạn cần ${selectedPlan.price.toLocaleString('vi-VN')} Coin để mua tool này.`
+        );
+      }
+
+      // Trừ số dư Coin
+      await this.userModel.findByIdAndUpdate(userId, {
+        $inc: { balance: -selectedPlan.price },
+      });
+
+      // Tạo đơn hàng ở trạng thái PAID
+      const paidOrder = await this.orderModel.create({
+        orderCode,
+        userId: new Types.ObjectId(userId),
+        userEmail,
+        productId: product._id,
+        productSnapshot: {
+          name: product.name,
+          slug: product.slug,
+          version: product.currentVersion,
+        },
+        planSnapshot: {
+          planId: selectedPlan.planId,
+          name: selectedPlan.name,
+          durationDays: selectedPlan.durationDays,
+          price: selectedPlan.price,
+        },
+        amount: selectedPlan.price,
+        status: OrderStatus.PAID,
+        paymentMethod: PaymentMethod.WALLET,
+        paidAt: now,
+        expiresAt,
+      });
+
+      // Cấp License Key ngay lập tức
+      const license = await this.licensesService.createLicense({
+        userId: paidOrder.userId.toString(),
+        productId: paidOrder.productId.toString(),
+        orderId: paidOrder._id.toString(),
+        productName: paidOrder.productSnapshot.name,
+        productSlug: paidOrder.productSnapshot.slug,
+        durationDays: paidOrder.planSnapshot.durationDays,
+      });
+
+      // Tăng lượt bán
+      await this.productModel.findByIdAndUpdate(product._id, {
+        $inc: { salesCount: 1 },
+      });
+
+      return {
+        ...paidOrder.toObject(),
+        license,
+      };
+    }
+
+    // --- CASE B: Thanh toán trực tiếp VietQR (Mua ngay) ---
     const newOrder = await this.orderModel.create({
       orderCode,
       userId: new Types.ObjectId(userId),

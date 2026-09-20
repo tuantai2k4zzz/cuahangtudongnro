@@ -15,12 +15,25 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { formatCurrencyVND } from '@/lib/utils';
-import { MOCK_PRODUCTS } from '@/lib/mock-data';
 import { CheckoutModal } from '@/components/checkout-modal';
+import { productsApi } from '@/lib/api-client';
 import { IProduct } from '@tudongnro/shared-types';
 
 export default function PricingPage() {
+  const [products, setProducts] = React.useState<IProduct[]>([]);
   const [selectedProductForBuy, setSelectedProductForBuy] = React.useState<IProduct | null>(null);
+
+  React.useEffect(() => {
+    async function loadProducts() {
+      try {
+        const res = await productsApi.getAll();
+        setProducts(res.data || []);
+      } catch {
+        setProducts([]);
+      }
+    }
+    loadProducts();
+  }, []);
 
   const tiers = [
     {
@@ -158,7 +171,7 @@ export default function PricingPage() {
                 <Button
                   variant={tier.isPopular ? 'default' : 'secondary'}
                   size="lg"
-                  onClick={() => setSelectedProductForBuy(MOCK_PRODUCTS[0])}
+                  onClick={() => setSelectedProductForBuy(products[0] || null)}
                   className="w-full text-xs font-bold"
                 >
                   Chọn Mua Gói Này

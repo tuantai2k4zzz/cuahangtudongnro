@@ -3,18 +3,24 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Gamepad2, Lock, Mail, ArrowRight, ShieldCheck, Loader2 } from 'lucide-react';
+import { Gamepad2, Lock, Mail, ArrowRight, ShieldCheck, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuth } from '@/contexts/auth-context';
+import { useToast } from '@/contexts/toast-context';
+import { UserRole } from '@tudongnro/shared-types';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login, setDemoUser } = useAuth();
+  const toast = useToast();
+
   const [email, setEmail] = React.useState('khachhang@gmail.com');
   const [password, setPassword] = React.useState('Password123@');
   const [isLoading, setIsLoading] = React.useState(false);
   const [errorMsg, setErrorMsg] = React.useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     if (!email || !password) {
@@ -23,11 +29,39 @@ export default function LoginPage() {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      // Demo successful login
-      router.push('/dashboard');
-    }, 1200);
+    const result = await login(email, password);
+    setIsLoading(false);
+
+    if (result.success) {
+      const isAdmin = email.toLowerCase().includes('admin');
+      toast.success(
+        `Đăng nhập thành công với vai trò ${isAdmin ? 'Quản Trị Viên' : 'Thành Viên'}!`
+      );
+      if (isAdmin) {
+        router.push('/admin');
+      } else {
+        router.push('/dashboard');
+      }
+    } else {
+      setErrorMsg(result.error || 'Email hoặc mật khẩu không chính xác');
+      toast.error('Đăng nhập không thành công. Vui lòng kiểm tra lại thông tin.');
+    }
+  };
+
+  const handleQuickLoginAdmin = () => {
+    setEmail('admin@tudongnrott.com');
+    setPassword('AdminPassword2026@');
+    setDemoUser('ADMIN');
+    toast.success('Đã nạp thông tin Admin hệ thống. Đang chuyển hướng...');
+    router.push('/admin');
+  };
+
+  const handleQuickLoginMember = () => {
+    setEmail('khachhang@gmail.com');
+    setPassword('Password123@');
+    setDemoUser('CUSTOMER');
+    toast.success('Đã nạp thông tin Thành Viên. Đang chuyển hướng...');
+    router.push('/dashboard');
   };
 
   return (
@@ -100,6 +134,29 @@ export default function LoginPage() {
             Đăng Nhập Vào Hệ Thống <ArrowRight className="h-4 w-4" />
           </Button>
         </form>
+
+        {/* Fast Credentials Helper for Testing */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 space-y-2">
+          <div className="text-[11px] font-semibold text-slate-400 text-center">
+            Đăng nhập nhanh để trải nghiệm:
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleQuickLoginMember}
+              className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border border-cyan-500/30 bg-cyan-950/20 text-cyan-400 hover:bg-cyan-900/40 text-[11px] font-bold transition-all cursor-pointer"
+            >
+              <UserCheck className="h-3.5 w-3.5" /> Thành Viên
+            </button>
+            <button
+              type="button"
+              onClick={handleQuickLoginAdmin}
+              className="flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-lg border border-purple-500/30 bg-purple-950/20 text-purple-400 hover:bg-purple-900/40 text-[11px] font-bold transition-all cursor-pointer"
+            >
+              <ShieldCheck className="h-3.5 w-3.5" /> Admin Quản Trị
+            </button>
+          </div>
+        </div>
 
         <div className="text-center text-xs text-slate-400 pt-2 border-t border-slate-800">
           Chưa có tài khoản?{' '}

@@ -82,6 +82,7 @@ export class AuthService implements OnModuleInit {
         fullName: newUser.fullName,
         role: newUser.role,
         status: newUser.status,
+        balance: newUser.balance || 0,
       },
       ...tokens,
     };
@@ -118,6 +119,7 @@ export class AuthService implements OnModuleInit {
         fullName: user.fullName,
         role: user.role,
         status: user.status,
+        balance: user.balance || 0,
       },
       ...tokens,
     };
@@ -156,6 +158,7 @@ export class AuthService implements OnModuleInit {
       fullName: user.fullName,
       role: user.role,
       status: user.status,
+      balance: user.balance || 0,
       createdAt: user['createdAt'],
       updatedAt: user['updatedAt'],
       lastLoginAt: user.lastLoginAt,

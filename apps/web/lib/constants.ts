@@ -4,7 +4,9 @@ export const SITE_CONFIG = {
   description: 'Nền tảng cung cấp & quản lý bản quyền Tool Auto Game Ngọc Rồng Online uy tín, mượt mà, bảo mật cao hàng đầu Việt Nam.',
   keywords: ['tool nro', 'auto ngoc rong', 'auto san boss nro', 'auto dap do nro', 'license nro'],
   supportTelegram: 'https://t.me/tudongnrott_support',
-  supportZalo: 'https://zalo.me/0987654321',
+  supportZalo: 'https://zalo.me/0983542830',
+  supportFacebook: 'https://www.facebook.com/share/1BFtijXXpU/',
+  supportPhone: '0983542830',
   supportEmail: 'hotro@tudongnrott.com',
   vietqrConfig: {
     bankCode: 'MB',
