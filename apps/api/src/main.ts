@@ -5,18 +5,12 @@ import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-import { ExpressAdapter } from '@nestjs/platform-express';
-import express from 'express';
 
-const server = express();
 let cachedApp: any;
 
 async function bootstrap() {
   if (!cachedApp) {
-    const app = await NestFactory.create(
-      AppModule,
-      new ExpressAdapter(server),
-    );
+    const app = await NestFactory.create(AppModule);
 
     // Global prefix
     app.setGlobalPrefix('api/v1');
@@ -63,7 +57,7 @@ async function bootstrap() {
     await app.init();
     cachedApp = app;
   }
-  return server;
+  return cachedApp.getHttpAdapter().getInstance();
 }
 
 // Nếu chạy trên Vercel Serverless
