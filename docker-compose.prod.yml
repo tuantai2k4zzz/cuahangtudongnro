@@ -1,0 +1,73 @@
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: tudongnrott-mongodb-prod
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: secretpassword123
+      MONGO_INITDB_DATABASE: tudongnro
+    volumes:
+      - mongo_prod_data:/data/db
+    networks:
+      - tudongnro-net
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: tudongnrott-api-prod
+    restart: always
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      CLIENT_URL: https://tudongnrott.com
+      MONGODB_URI: mongodb://admin:secretpassword123@mongodb:27017/tudongnro?authSource=admin
+      JWT_ACCESS_SECRET: tudongnrott_jwt_access_super_secret_key_2026
+      JWT_REFRESH_SECRET: tudongnrott_jwt_refresh_super_secret_key_2026
+      BANK_CODE: MB
+      BANK_ACCOUNT: "0865903707"
+      BANK_ACCOUNT_NAME: "BUI TUAN TAI"
+      PAYMENT_WEBHOOK_SECRET: vietqr_webhook_secret_hmac_sha256_key_2026
+    depends_on:
+      - mongodb
+    networks:
+      - tudongnro-net
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: tudongnrott-web-prod
+    restart: always
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://api.tudongnrott.com/api/v1
+    depends_on:
+      - api
+    networks:
+      - tudongnro-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: tudongnrott-nginx-prod
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - web
+      - api
+    networks:
+      - tudongnro-net
+
+networks:
+  tudongnro-net:
+    driver: bridge
+
+volumes:
+  mongo_prod_data:

@@ -1,0 +1,21 @@
+{
+  "name": "tudongnrott-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Nền tảng bán và quản lý tool game NRO Online - TUDONGNROTT.com",
+  "scripts": {
+    "dev:web": "pnpm --filter web dev",
+    "dev:api": "pnpm --filter api start:dev",
+    "build:web": "pnpm --filter web build",
+    "build:api": "pnpm --filter api build",
+    "build:types": "pnpm --filter shared-types build"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [],
+    "ignoredBuiltDependencies": ["@scarf/scarf"]
+  },
+  "packageManager": "pnpm@11.1.2"
+}
