@@ -1,11 +1,11 @@
 const Module = require('module');
 const path = require('path');
 
-// Hook Module._resolveFilename so any require('@tudongnro/shared-types') resolves to our local file
+// Hook Module._resolveFilename so any require('@tudongnro/shared-types') resolves to our local file in dist
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, parent, isMain, options) {
   if (request === '@tudongnro/shared-types') {
-    return path.join(__dirname, 'shared-types.js');
+    return path.join(__dirname, '../dist/shared-types.js');
   }
   return originalResolve.call(this, request, parent, isMain, options);
 };
@@ -13,7 +13,7 @@ Module._resolveFilename = function (request, parent, isMain, options) {
 let cachedHandler;
 
 module.exports = async function (req, res) {
-  // 1. CORS Headers trực tiếp tại Vercel Function
+  // 1. CORS Headers trực tiếp tại Vercel Function: Ngăn chặn triệt để lỗi PreflightMissingAllowOriginHeader
   const origin = req.headers.origin || '*';
   res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -28,16 +28,7 @@ module.exports = async function (req, res) {
   try {
     if (!cachedHandler) {
       require('reflect-metadata');
-      let main;
-      try {
-        main = require('./dist/main');
-      } catch (e1) {
-        try {
-          main = require('../dist/main');
-        } catch (e2) {
-          throw new Error(`Cannot find main in ./dist/main (${e1.message}) or ../dist/main (${e2.message})`);
-        }
-      }
+      const main = require('../dist/main');
       cachedHandler = main.default || main;
     }
     return await cachedHandler(req, res);
