@@ -17,6 +17,7 @@ export declare class AuthController {
                 status: import("@tudongnro/shared-types").UserStatus;
                 balance: number;
             };
+            accessToken: string;
         };
     }>;
     login(dto: LoginDto, res: Response): Promise<{
@@ -30,6 +31,7 @@ export declare class AuthController {
                 status: import("@tudongnro/shared-types").UserStatus.ACTIVE;
                 balance: number;
             };
+            accessToken: string;
         };
     }>;
     refresh(req: Request, res: Response): Promise<Response<any, Record<string, any>> | {

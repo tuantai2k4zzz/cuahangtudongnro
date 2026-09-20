@@ -86,6 +86,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.data?.user) {
         setUser(res.data.user);
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(res.data.user));
+        if ((res.data as any)?.accessToken) {
+          localStorage.setItem('tudongnro_access_token', (res.data as any).accessToken);
+        }
         setIsLoading(false);
         return { success: true };
       }
@@ -104,6 +107,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.data?.user) {
         setUser(res.data.user);
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(res.data.user));
+        if ((res.data as any)?.accessToken) {
+          localStorage.setItem('tudongnro_access_token', (res.data as any).accessToken);
+        }
         setIsLoading(false);
         return { success: true };
       }
@@ -121,6 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setUser(null);
       localStorage.removeItem(AUTH_STORAGE_KEY);
+      localStorage.removeItem('tudongnro_access_token');
     }
   };
 

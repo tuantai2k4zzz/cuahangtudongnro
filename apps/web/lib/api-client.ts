@@ -12,16 +12,35 @@ import {
   IDepositTransaction,
 } from '@tudongnro/shared-types';
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000/api/v1';
+function getBaseUrl() {
+  let url = (process.env.NEXT_PUBLIC_API_URL || 'https://cuahangtudongnro-server.vercel.app/api/v1').trim();
+  url = url.replace(/\/+$/, '');
+  if (!url.endsWith('/api/v1')) {
+    url = `${url}/api/v1`;
+  }
+  return url;
+}
+
+const API_BASE_URL = getBaseUrl();
 
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
 ): Promise<IApiResponse<T>> {
-  const url = `${API_BASE_URL}${endpoint}`;
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  const url = `${API_BASE_URL}${cleanEndpoint}`;
+
+  const authHeader: Record<string, string> = {};
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('tudongnro_access_token');
+    if (token) {
+      authHeader['Authorization'] = `Bearer ${token}`;
+    }
+  }
+
   const headers = {
     'Content-Type': 'application/json',
+    ...authHeader,
     ...(options.headers || {}),
   };
 

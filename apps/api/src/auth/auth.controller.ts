@@ -35,7 +35,7 @@ export class AuthController {
     this.setTokenCookies(res, result.accessToken, result.refreshToken);
     return {
       message: 'Đăng ký tài khoản thành công',
-      data: { user: result.user },
+      data: { user: result.user, accessToken: result.accessToken },
     };
   }
 
@@ -51,7 +51,7 @@ export class AuthController {
     this.setTokenCookies(res, result.accessToken, result.refreshToken);
     return {
       message: 'Đăng nhập thành công',
-      data: { user: result.user },
+      data: { user: result.user, accessToken: result.accessToken },
     };
   }
 
@@ -129,14 +129,14 @@ export class AuthController {
     res.cookie('access_token', accessToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: 'lax',
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 15 * 60 * 1000, // 15 mins
     });
 
     res.cookie('refresh_token', refreshToken, {
       httpOnly: true,
       secure: isProd,
-      sameSite: 'lax',
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
   }
