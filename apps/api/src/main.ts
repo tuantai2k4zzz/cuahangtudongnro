@@ -1,6 +1,8 @@
+import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { ExpressAdapter } from '@nestjs/platform-express';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -10,7 +12,10 @@ let cachedApp: any;
 
 async function bootstrap() {
   if (!cachedApp) {
-    const app = await NestFactory.create(AppModule);
+    const app = await NestFactory.create(
+      AppModule,
+      new ExpressAdapter(),
+    );
 
     // Global prefix
     app.setGlobalPrefix('api/v1');
@@ -81,6 +86,11 @@ if (process.env.VERCEL) {
 
 // Export handler cho Vercel Node.js Builder
 export default async function handler(req: any, res: any) {
-  const expressApp = await bootstrap();
-  expressApp(req, res);
+  try {
+    const expressApp = await bootstrap();
+    expressApp(req, res);
+  } catch (error: any) {
+    console.error('NestJS Bootstrap Error:', error);
+    res.status(500).json({ error: 'Internal Server Error', details: error.message || String(error) });
+  }
 }
