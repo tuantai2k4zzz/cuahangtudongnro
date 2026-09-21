@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/contexts/toast-context';
+import { useRouter } from 'next/navigation';
 import { ticketsApi } from '@/lib/api-client';
 import { ISupportTicket, TicketCategory, TicketStatus } from '@tudongnro/shared-types';
 import { formatDate } from '@/lib/utils';
@@ -43,9 +44,11 @@ const FAQS = [
   },
 ];
 
-const ACTIVE_TICKET_STORAGE_KEY = 'tudongnro_active_ticket_id';
-
 export function SupportWidget() {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuth();
+  const toast = useToast();
+
   const [isOpen, setIsOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'CHAT' | 'CHANNELS' | 'FAQ'>('CHAT');
   const [category, setCategory] = React.useState<TicketCategory>(TicketCategory.LOI_TOOL);
@@ -60,8 +63,14 @@ export function SupportWidget() {
   const lastAdminMsgCountRef = React.useRef(0);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
-  const { user, isAuthenticated } = useAuth();
-  const toast = useToast();
+  const userId = React.useMemo(() => {
+    if (!isAuthenticated || !user) return null;
+    return (user.id || (user as any)._id)?.toString() || user.email;
+  }, [user, isAuthenticated]);
+
+  const userTicketStorageKey = React.useMemo(() => {
+    return userId ? `tudongnro_active_ticket_${userId}` : null;
+  }, [userId]);
 
   // If user is Admin, they manage tickets from /admin dashboard and do not need the floating customer widget
   if (user?.role === 'ADMIN') {
@@ -117,20 +126,29 @@ export function SupportWidget() {
         }
       } catch (err: any) {
         if (err?.statusCode === 404) {
-          localStorage.removeItem(ACTIVE_TICKET_STORAGE_KEY);
+          if (userTicketStorageKey) {
+            localStorage.removeItem(userTicketStorageKey);
+          }
           setCurrentTicketId(null);
           setActiveTicket(null);
         }
       }
     },
-    [isOpen, toast]
+    [isOpen, toast, userTicketStorageKey]
   );
 
   // Load stored ticket ID or auto-fetch latest ticket if user is logged in
   React.useEffect(() => {
+    if (!isAuthenticated || !userId || !userTicketStorageKey) {
+      setCurrentTicketId(null);
+      setActiveTicket(null);
+      setUnreadCount(0);
+      return;
+    }
+
     const initTicket = async () => {
       try {
-        const storedId = localStorage.getItem(ACTIVE_TICKET_STORAGE_KEY);
+        const storedId = localStorage.getItem(userTicketStorageKey);
         if (storedId) {
           setCurrentTicketId(storedId);
           await syncTicket(storedId, true);
@@ -138,23 +156,21 @@ export function SupportWidget() {
         }
 
         // Auto-load user's latest ticket if logged in
-        if (isAuthenticated && user) {
-          const res = await ticketsApi.getMyTickets();
-          if (res.data && res.data.length > 0) {
-            const latest = res.data[0];
-            const latestId = latest.id || (latest as any)._id;
-            if (latestId) {
-              localStorage.setItem(ACTIVE_TICKET_STORAGE_KEY, latestId);
-              setCurrentTicketId(latestId);
-              setActiveTicket(latest);
-            }
+        const res = await ticketsApi.getMyTickets();
+        if (res.data && res.data.length > 0) {
+          const latest = res.data[0];
+          const latestId = (latest.id || (latest as any)._id)?.toString();
+          if (latestId) {
+            localStorage.setItem(userTicketStorageKey, latestId);
+            setCurrentTicketId(latestId);
+            setActiveTicket(latest);
           }
         }
       } catch {}
     };
 
     initTicket();
-  }, [isAuthenticated, user, syncTicket]);
+  }, [isAuthenticated, userId, userTicketStorageKey, syncTicket]);
 
   // Listen to open widget event from notification bell or anywhere
   React.useEffect(() => {
@@ -163,19 +179,21 @@ export function SupportWidget() {
       setActiveTab('CHAT');
       setUnreadCount(0);
 
-      const targetId = e?.detail?.ticketId || localStorage.getItem(ACTIVE_TICKET_STORAGE_KEY);
+      if (!isAuthenticated || !userTicketStorageKey) return;
+
+      const targetId = e?.detail?.ticketId || localStorage.getItem(userTicketStorageKey);
       if (targetId) {
-        localStorage.setItem(ACTIVE_TICKET_STORAGE_KEY, targetId);
+        localStorage.setItem(userTicketStorageKey, targetId);
         setCurrentTicketId(targetId);
         await syncTicket(targetId, true);
-      } else if (isAuthenticated && user) {
+      } else {
         try {
           const res = await ticketsApi.getMyTickets();
           if (res.data && res.data.length > 0) {
             const latest = res.data[0];
-            const latestId = latest.id || (latest as any)._id;
+            const latestId = (latest.id || (latest as any)._id)?.toString();
             if (latestId) {
-              localStorage.setItem(ACTIVE_TICKET_STORAGE_KEY, latestId);
+              localStorage.setItem(userTicketStorageKey, latestId);
               setCurrentTicketId(latestId);
               setActiveTicket(latest);
             }
@@ -186,7 +204,7 @@ export function SupportWidget() {
 
     window.addEventListener('open-support-widget', handleOpen);
     return () => window.removeEventListener('open-support-widget', handleOpen);
-  }, [isAuthenticated, user, syncTicket]);
+  }, [isAuthenticated, userTicketStorageKey, syncTicket]);
 
   // When chat opens, reset unread count and notify bell to mark all chat/support notifications as read
   React.useEffect(() => {
@@ -220,7 +238,9 @@ export function SupportWidget() {
             const latest = res.data[0];
             const latestId = latest.id || (latest as any)._id;
             if (latestId) {
-              localStorage.setItem(ACTIVE_TICKET_STORAGE_KEY, latestId);
+              if (userTicketStorageKey) {
+                localStorage.setItem(userTicketStorageKey, latestId);
+              }
               setCurrentTicketId(latestId);
               setActiveTicket(latest);
             }
@@ -255,6 +275,16 @@ export function SupportWidget() {
     e.preventDefault();
     if (!inputText.trim()) return;
 
+    if (!isAuthenticated) {
+      toast.showToast({
+        type: 'WARNING',
+        title: 'Yêu cầu đăng nhập',
+        message: 'Vui lòng đăng nhập để gửi tin nhắn hỗ trợ kỹ thuật.',
+      });
+      router.push('/login');
+      return;
+    }
+
     const userMsg = inputText.trim();
     setInputText('');
     setIsSending(true);
@@ -267,17 +297,19 @@ export function SupportWidget() {
       } else {
         // Create new ticket in MongoDB
         const created = await ticketsApi.create({
-          customerName: user?.fullName || 'Khách vãng lai',
-          customerEmail: user?.email || 'guest@gmail.com',
+          customerName: user?.fullName || 'Khách hàng',
+          customerEmail: user?.email || 'user@gmail.com',
           category,
           orderCode: orderCodeInput || undefined,
           subject: userMsg.substring(0, 60),
           message: userMsg,
         });
 
-        const newId = created.data?.id || (created.data as any)?._id;
+        const newId = (created.data?.id || (created.data as any)?._id)?.toString();
         if (newId) {
-          localStorage.setItem(ACTIVE_TICKET_STORAGE_KEY, newId);
+          if (userTicketStorageKey) {
+            localStorage.setItem(userTicketStorageKey, newId);
+          }
           setCurrentTicketId(newId);
           setActiveTicket(created.data);
           lastAdminMsgCountRef.current = 0;
@@ -295,7 +327,9 @@ export function SupportWidget() {
   };
 
   const handleCreateNewTicket = () => {
-    localStorage.removeItem(ACTIVE_TICKET_STORAGE_KEY);
+    if (userTicketStorageKey) {
+      localStorage.removeItem(userTicketStorageKey);
+    }
     setCurrentTicketId(null);
     setActiveTicket(null);
     lastAdminMsgCountRef.current = 0;
@@ -430,154 +464,193 @@ export function SupportWidget() {
             {/* Content Body */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {activeTab === 'CHAT' && (
-                <div className="flex flex-col h-full justify-between gap-3">
-                  {/* Category & Order Code Selector (Only when starting fresh) */}
-                  {!activeTicket && (
-                    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-2.5 space-y-2 shrink-0">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-slate-400 font-medium">Chủ đề cần hỗ trợ:</span>
-                        <select
-                          value={category}
-                          onChange={(e) => setCategory(e.target.value as any)}
-                          className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-cyan-300 font-semibold focus:outline-none"
-                        >
-                          <option value="THANH_TOAN">Nạp tiền / Quét mã VietQR</option>
-                          <option value="LOI_TOOL">Lỗi kích hoạt / HWID</option>
-                          <option value="TAI_KHOAN">Tài khoản & Mật khẩu</option>
-                          <option value="BAO_HANH">Bảo hành & Gia hạn</option>
-                          <option value="KHAC">Vấn đề khác</option>
-                        </select>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Input
-                          placeholder="Mã đơn hàng (VD: NRO-88219 nếu có)"
-                          value={orderCodeInput}
-                          onChange={(e) => setOrderCodeInput(e.target.value)}
-                          className="h-8 text-xs bg-slate-800/80 border-slate-700/80"
-                        />
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          onClick={handleSendOrderCodeQuick}
-                          className="h-8 text-[11px] shrink-0 border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10"
-                        >
-                          Gửi Mã Đơn
-                        </Button>
-                      </div>
+                !isAuthenticated ? (
+                  <div className="flex flex-col items-center justify-center h-full text-center p-4 sm:p-6 space-y-4 my-auto">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 shadow-lg shadow-cyan-500/10">
+                      <Headphones className="h-7 w-7" />
                     </div>
-                  )}
-
-                  {/* Active Ticket Status Bar */}
-                  {activeTicket && (
-                    <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 px-3 py-2 flex items-center justify-between text-[11px] shrink-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-cyan-400">
-                          {activeTicket.ticketCode}
-                        </span>
-                        <Badge
-                          className={`text-[9px] py-0 px-1.5 ${
-                            activeTicket.status === 'OPEN'
-                              ? 'bg-amber-500/20 text-amber-300'
-                              : activeTicket.status === 'IN_PROGRESS'
-                              ? 'bg-cyan-500/20 text-cyan-300'
-                              : 'bg-emerald-500/20 text-emerald-300'
-                          }`}
-                        >
-                          {activeTicket.status === 'OPEN'
-                            ? 'Đang chờ Admin'
-                            : activeTicket.status === 'IN_PROGRESS'
-                            ? 'Admin đang xử lý'
-                            : 'Đã giải quyết'}
-                        </Badge>
-                      </div>
+                    <div className="space-y-1.5">
+                      <h4 className="text-sm font-bold text-white">Yêu Cầu Đăng Nhập</h4>
+                      <p className="text-xs text-slate-400 leading-relaxed max-w-xs mx-auto">
+                        Vui lòng đăng nhập để gửi yêu cầu hỗ trợ, chat trực tiếp với kỹ thuật viên và theo dõi tiến độ xử lý ticket của bạn.
+                      </p>
+                    </div>
+                    <Button
+                      className="btn-gaming-primary text-xs font-bold px-6 py-2.5 cursor-pointer shadow-lg shadow-cyan-500/20"
+                      onClick={() => {
+                        setIsOpen(false);
+                        router.push('/login');
+                      }}
+                    >
+                      Đăng Nhập Để Nhắn Tin →
+                    </Button>
+                    <div className="pt-3 text-[11px] text-slate-500">
+                      Bạn cũng có thể xem nhanh{' '}
                       <button
-                        onClick={handleCreateNewTicket}
-                        className="text-slate-400 hover:text-white underline text-[10px]"
+                        onClick={() => setActiveTab('FAQ')}
+                        className="text-cyan-400 hover:underline font-medium cursor-pointer"
                       >
-                        Tạo ticket mới
+                        Câu hỏi thường gặp
+                      </button>{' '}
+                      hoặc liên hệ qua{' '}
+                      <button
+                        onClick={() => setActiveTab('CHANNELS')}
+                        className="text-cyan-400 hover:underline font-medium cursor-pointer"
+                      >
+                        Zalo / Facebook
                       </button>
                     </div>
-                  )}
-
-                  {/* Message Log */}
-                  <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-                    {/* Default Welcome Message */}
-                    <div className="flex flex-col items-start">
-                      <div className="text-[10px] text-slate-500 mb-0.5 flex items-center gap-1">
-                        <Headphones className="h-3 w-3 text-cyan-400" />
-                        <span>Hệ thống TUDONGNROTT</span>
-                      </div>
-                      <div className="max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed bg-slate-800/90 text-slate-200 border border-slate-700/80 rounded-tl-none">
-                        {greeting}! Chúng tôi là bộ phận Hỗ trợ Kỹ thuật TUDONGNROTT. Bạn đang cần hỗ trợ vấn đề gì hôm nay?
-                      </div>
-                    </div>
-
-                    {/* Messages from Ticket */}
-                    {activeTicket?.messages?.map((msg, idx) => {
-                      const isAdminMsg = msg.sender === 'ADMIN';
-                      return (
-                        <div
-                          key={idx}
-                          className={`flex flex-col ${isAdminMsg ? 'items-start' : 'items-end'}`}
-                        >
-                          <div className="text-[10px] text-slate-500 mb-0.5 flex items-center gap-1">
-                            {isAdminMsg ? (
-                              <>
-                                <Headphones className="h-3 w-3 text-cyan-400" />
-                                <span className="text-cyan-400 font-bold">
-                                  {msg.senderName || 'Kỹ Thuật Viên Admin'}
-                                </span>
-                              </>
-                            ) : (
-                              <span>{msg.senderName || 'Bạn'}</span>
-                            )}
-                            <span>• {msg.createdAt ? formatDate(msg.createdAt) : 'Vừa xong'}</span>
-                          </div>
-                          <div
-                            className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
-                              isAdminMsg
-                                ? 'bg-[#0E1B2E] text-slate-100 border border-cyan-500/40 rounded-tl-none shadow-md shadow-cyan-950/40'
-                                : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-medium rounded-tr-none shadow-md shadow-cyan-500/20'
-                            }`}
+                  </div>
+                ) : (
+                  <div className="flex flex-col h-full justify-between gap-3">
+                    {/* Category & Order Code Selector (Only when starting fresh) */}
+                    {!activeTicket && (
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-2.5 space-y-2 shrink-0">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="text-slate-400 font-medium">Chủ đề cần hỗ trợ:</span>
+                          <select
+                            value={category}
+                            onChange={(e) => setCategory(e.target.value as any)}
+                            className="rounded-lg border border-slate-700 bg-slate-800 px-2 py-1 text-[11px] text-cyan-300 font-semibold focus:outline-none"
                           >
-                            {msg.message}
-                          </div>
+                            <option value="THANH_TOAN">Nạp tiền / Quét mã VietQR</option>
+                            <option value="LOI_TOOL">Lỗi kích hoạt / HWID</option>
+                            <option value="TAI_KHOAN">Tài khoản & Mật khẩu</option>
+                            <option value="BAO_HANH">Bảo hành & Gia hạn</option>
+                            <option value="KHAC">Vấn đề khác</option>
+                          </select>
                         </div>
-                      );
-                    })}
 
-                    {isSending && (
-                      <div className="flex items-center gap-2 text-xs text-slate-400 italic">
-                        <span className="animate-pulse">Đang gửi tin nhắn...</span>
+                        <div className="flex items-center gap-2">
+                          <Input
+                            placeholder="Mã đơn hàng (VD: NRO-88219 nếu có)"
+                            value={orderCodeInput}
+                            onChange={(e) => setOrderCodeInput(e.target.value)}
+                            className="h-8 text-xs bg-slate-800/80 border-slate-700/80"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={handleSendOrderCodeQuick}
+                            className="h-8 text-[11px] shrink-0 border-cyan-500/40 text-cyan-400 hover:bg-cyan-500/10"
+                          >
+                            Gửi Mã Đơn
+                          </Button>
+                        </div>
                       </div>
                     )}
-                    <div ref={messagesEndRef} />
-                  </div>
 
-                  {/* Input form */}
-                  <form onSubmit={handleSendMessage} className="flex gap-2 pt-2 border-t border-slate-800">
-                    <Input
-                      placeholder={
-                        activeTicket
-                          ? 'Nhập tin nhắn phản hồi cho kỹ thuật viên...'
-                          : 'Nhập nội dung cần hỗ trợ...'
-                      }
-                      value={inputText}
-                      onChange={(e) => setInputText(e.target.value)}
-                      className="h-10 text-xs bg-slate-900 border-slate-700"
-                    />
-                    <Button
-                      type="submit"
-                      size="sm"
-                      className="h-10 px-3.5 btn-gaming-primary shrink-0"
-                      disabled={!inputText.trim() || isSending}
-                    >
-                      <Send className="h-4 w-4" />
-                    </Button>
-                  </form>
-                </div>
+                    {/* Active Ticket Status Bar */}
+                    {activeTicket && (
+                      <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 px-3 py-2 flex items-center justify-between text-[11px] shrink-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-cyan-400">
+                            {activeTicket.ticketCode}
+                          </span>
+                          <Badge
+                            className={`text-[9px] py-0 px-1.5 ${
+                              activeTicket.status === 'OPEN'
+                                ? 'bg-amber-500/20 text-amber-300'
+                                : activeTicket.status === 'IN_PROGRESS'
+                                ? 'bg-cyan-500/20 text-cyan-300'
+                                : 'bg-emerald-500/20 text-emerald-300'
+                            }`}
+                          >
+                            {activeTicket.status === 'OPEN'
+                              ? 'Đang chờ Admin'
+                              : activeTicket.status === 'IN_PROGRESS'
+                              ? 'Admin đang xử lý'
+                              : 'Đã giải quyết'}
+                          </Badge>
+                        </div>
+                        <button
+                          onClick={handleCreateNewTicket}
+                          className="text-slate-400 hover:text-white underline text-[10px]"
+                        >
+                          Tạo ticket mới
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Message Log */}
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+                      {/* Default Welcome Message */}
+                      <div className="flex flex-col items-start">
+                        <div className="text-[10px] text-slate-500 mb-0.5 flex items-center gap-1">
+                          <Headphones className="h-3 w-3 text-cyan-400" />
+                          <span>Hệ thống TUDONGNROTT</span>
+                        </div>
+                        <div className="max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed bg-slate-800/90 text-slate-200 border border-slate-700/80 rounded-tl-none">
+                          {greeting}! Chúng tôi là bộ phận Hỗ trợ Kỹ thuật TUDONGNROTT. Bạn đang cần hỗ trợ vấn đề gì hôm nay?
+                        </div>
+                      </div>
+
+                      {/* Messages from Ticket */}
+                      {activeTicket?.messages?.map((msg, idx) => {
+                        const isAdminMsg = msg.sender === 'ADMIN';
+                        return (
+                          <div
+                            key={idx}
+                            className={`flex flex-col ${isAdminMsg ? 'items-start' : 'items-end'}`}
+                          >
+                            <div className="text-[10px] text-slate-500 mb-0.5 flex items-center gap-1">
+                              {isAdminMsg ? (
+                                <>
+                                  <Headphones className="h-3 w-3 text-cyan-400" />
+                                  <span className="text-cyan-400 font-bold">
+                                    {msg.senderName || 'Kỹ Thuật Viên Admin'}
+                                  </span>
+                                </>
+                              ) : (
+                                <span>{msg.senderName || 'Bạn'}</span>
+                              )}
+                              <span>• {msg.createdAt ? formatDate(msg.createdAt) : 'Vừa xong'}</span>
+                            </div>
+                            <div
+                              className={`max-w-[85%] rounded-2xl p-3 text-xs leading-relaxed ${
+                                isAdminMsg
+                                  ? 'bg-[#0E1B2E] text-slate-100 border border-cyan-500/40 rounded-tl-none shadow-md shadow-cyan-950/40'
+                                  : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-medium rounded-tr-none shadow-md shadow-cyan-500/20'
+                              }`}
+                            >
+                              {msg.message}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {isSending && (
+                        <div className="flex items-center gap-2 text-xs text-slate-400 italic">
+                          <span className="animate-pulse">Đang gửi tin nhắn...</span>
+                        </div>
+                      )}
+                      <div ref={messagesEndRef} />
+                    </div>
+
+                    {/* Input form */}
+                    <form onSubmit={handleSendMessage} className="flex gap-2 pt-2 border-t border-slate-800">
+                      <Input
+                        placeholder={
+                          activeTicket
+                            ? 'Nhập tin nhắn phản hồi cho kỹ thuật viên...'
+                            : 'Nhập nội dung cần hỗ trợ...'
+                        }
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        className="h-10 text-xs bg-slate-900 border-slate-700"
+                      />
+                      <Button
+                        type="submit"
+                        size="sm"
+                        className="h-10 px-3.5 btn-gaming-primary shrink-0"
+                        disabled={!inputText.trim() || isSending}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </form>
+                  </div>
+                )
               )}
 
               {activeTab === 'CHANNELS' && (

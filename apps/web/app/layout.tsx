@@ -55,17 +55,17 @@ export default function RootLayout({
   return (
     <html lang="vi" className="dark scroll-smooth">
       <body className="min-h-screen flex flex-col bg-[#080B12] text-slate-100 antialiased selection:bg-cyan-500 selection:text-black pb-14 md:pb-0">
-        <AuthProvider>
-          <WishlistProvider>
-            <ToastProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <WishlistProvider>
               <Navbar />
               <main className="flex-1">{children}</main>
               <Footer />
               <SupportWidget />
               <MobileBottomNav />
-            </ToastProvider>
-          </WishlistProvider>
-        </AuthProvider>
+            </WishlistProvider>
+          </AuthProvider>
+        </ToastProvider>
       </body>
     </html>
   );

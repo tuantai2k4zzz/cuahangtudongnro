@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Search,
   Filter,
@@ -23,6 +23,7 @@ import { formatCurrencyVND } from '@/lib/utils';
 import { CheckoutModal } from '@/components/checkout-modal';
 import { ProductCompareModal } from '@/components/product-compare-modal';
 import { useWishlist } from '@/contexts/wishlist-context';
+import { useAuth } from '@/contexts/auth-context';
 import { useToast } from '@/contexts/toast-context';
 import { productsApi } from '@/lib/api-client';
 import { IProduct } from '@tudongnro/shared-types';
@@ -30,23 +31,25 @@ import { IProduct } from '@tudongnro/shared-types';
 const CATEGORY_TABS = ['ALL', 'WISHLIST', ...Object.keys(CATEGORY_LABELS)];
 
 function ToolsCatalogContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const initialWishlistTab = searchParams.get('tab') === 'wishlist';
+
+  const { isAuthenticated } = useAuth();
+  const { isInWishlist, toggleWishlist, wishlistCount } = useWishlist();
+  const toast = useToast();
 
   const [products, setProducts] = React.useState<IProduct[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState<string>(
-    initialWishlistTab ? 'WISHLIST' : 'ALL'
+    initialWishlistTab && isAuthenticated ? 'WISHLIST' : 'ALL'
   );
   const [sortBy, setSortBy] = React.useState<'POPULAR' | 'PRICE_ASC' | 'PRICE_DESC'>('POPULAR');
   const [selectedProductForBuy, setSelectedProductForBuy] = React.useState<IProduct | null>(null);
   const [compareModalOpen, setCompareModalOpen] = React.useState(false);
   const [productForCompare, setProductForCompare] = React.useState<IProduct | undefined>(undefined);
-
-  const { isInWishlist, toggleWishlist, wishlistCount } = useWishlist();
-  const toast = useToast();
 
   React.useEffect(() => {
     async function loadProducts() {
@@ -66,9 +69,18 @@ function ToolsCatalogContent() {
 
   React.useEffect(() => {
     if (searchParams.get('tab') === 'wishlist') {
-      setSelectedCategory('WISHLIST');
+      if (!isAuthenticated) {
+        toast.showToast({
+          type: 'WARNING',
+          title: 'Yêu cầu đăng nhập',
+          message: 'Vui lòng đăng nhập để xem danh sách sản phẩm yêu thích của bạn.',
+        });
+        router.push('/login');
+      } else {
+        setSelectedCategory('WISHLIST');
+      }
     }
-  }, [searchParams]);
+  }, [searchParams, isAuthenticated, router, toast]);
 
   // Filter & Sort Logic
   const filteredProducts = React.useMemo(() => {
@@ -150,8 +162,19 @@ function ToolsCatalogContent() {
             {CATEGORY_TABS.map((cat) => (
               <button
                 key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all whitespace-nowrap ${
+                onClick={() => {
+                  if (cat === 'WISHLIST' && !isAuthenticated) {
+                    toast.showToast({
+                      type: 'WARNING',
+                      title: 'Yêu cầu đăng nhập',
+                      message: 'Vui lòng đăng nhập để xem danh sách sản phẩm yêu thích của bạn.',
+                    });
+                    router.push('/login');
+                    return;
+                  }
+                  setSelectedCategory(cat);
+                }}
+                className={`flex items-center gap-1.5 rounded-xl px-4 py-2 text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                   selectedCategory === cat
                     ? 'bg-cyan-500 text-slate-950 shadow-md shadow-cyan-500/20'
                     : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
@@ -164,7 +187,7 @@ function ToolsCatalogContent() {
                   {cat === 'ALL'
                     ? `Tất Cả (${products.length})`
                     : cat === 'WISHLIST'
-                    ? `Yêu Thích (${wishlistCount})`
+                    ? `Yêu Thích (${isAuthenticated ? wishlistCount : 0})`
                     : CATEGORY_LABELS[cat] || cat}
                 </span>
               </button>
@@ -224,14 +247,16 @@ function ToolsCatalogContent() {
                       <button
                         onClick={(e) => {
                           e.preventDefault();
-                          toggleWishlist(prodId);
-                          toast.showToast({
-                            type: 'SUCCESS',
-                            title: isFav ? 'Đã xóa khỏi yêu thích' : 'Đã thêm vào yêu thích',
-                            message: product.name,
-                          });
+                          const success = toggleWishlist(prodId);
+                          if (success) {
+                            toast.showToast({
+                              type: 'SUCCESS',
+                              title: isFav ? 'Đã xóa khỏi yêu thích' : 'Đã thêm vào yêu thích',
+                              message: product.name,
+                            });
+                          }
                         }}
-                        className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-950/70 backdrop-blur-md border border-slate-700/60 text-slate-300 hover:text-rose-500 hover:border-rose-500/50 transition-all"
+                        className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-full bg-slate-950/70 backdrop-blur-md border border-slate-700/60 text-slate-300 hover:text-rose-500 hover:border-rose-500/50 transition-all cursor-pointer"
                         aria-label="Thêm vào danh sách yêu thích"
                       >
                         <Heart className={`h-4 w-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />

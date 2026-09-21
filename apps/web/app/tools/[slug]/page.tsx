@@ -244,14 +244,16 @@ export default function ToolDetailPage() {
                 </span>
                 <button
                   onClick={() => {
-                    toggleWishlist(prodId);
-                    toast.showToast({
-                      type: 'SUCCESS',
-                      title: isFav ? 'Đã xóa khỏi yêu thích' : 'Đã thêm vào yêu thích',
-                      message: product.name,
-                    });
+                    const success = toggleWishlist(prodId);
+                    if (success) {
+                      toast.showToast({
+                        type: 'SUCCESS',
+                        title: isFav ? 'Đã xóa khỏi yêu thích' : 'Đã thêm vào yêu thích',
+                        message: product.name,
+                      });
+                    }
                   }}
-                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-400 transition-colors"
+                  className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-rose-400 transition-colors cursor-pointer"
                 >
                   <Heart className={`h-4 w-4 ${isFav ? 'fill-rose-500 text-rose-500' : ''}`} />
                   <span>{isFav ? 'Đã thích' : 'Yêu thích'}</span>

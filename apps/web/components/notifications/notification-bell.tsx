@@ -14,7 +14,9 @@ import {
   MessageSquare,
   Clock,
   Trash2,
+  LogIn,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { ticketsApi } from '@/lib/api-client';
 import { UserRole } from '@tudongnro/shared-types';
@@ -30,8 +32,6 @@ export interface SystemNotification {
   ticketId?: string;
 }
 
-const NOTIF_STORAGE_KEY = 'tudongnro_notifications';
-
 export function NotificationBell() {
   const [isOpen, setIsOpen] = React.useState(false);
   const [notifications, setNotifications] = React.useState<SystemNotification[]>([]);
@@ -39,24 +39,46 @@ export function NotificationBell() {
   const { user, isAuthenticated } = useAuth();
   const router = useRouter();
 
-  // Load stored notifications from localStorage on mount
+  const userId = React.useMemo(() => {
+    if (!isAuthenticated || !user) return null;
+    return (user.id || (user as any)._id)?.toString() || user.email;
+  }, [user, isAuthenticated]);
+
+  const userNotifStorageKey = React.useMemo(() => {
+    return userId ? `tudongnro_notifications_${userId}` : null;
+  }, [userId]);
+
+  const userTicketStorageKey = React.useMemo(() => {
+    return userId ? `tudongnro_active_ticket_${userId}` : null;
+  }, [userId]);
+
+  // Load stored notifications for this specific user
   React.useEffect(() => {
+    if (!userId || !userNotifStorageKey) {
+      setNotifications([]);
+      return;
+    }
+
     try {
-      const stored = localStorage.getItem(NOTIF_STORAGE_KEY);
+      const stored = localStorage.getItem(userNotifStorageKey);
       if (stored) {
         setNotifications(JSON.parse(stored));
+      } else {
+        setNotifications([]);
       }
     } catch {
       setNotifications([]);
     }
-  }, []);
+  }, [userId, userNotifStorageKey]);
 
-  // Save to localStorage whenever notifications change
+  // Save to user-specific localStorage whenever notifications change
   React.useEffect(() => {
-    try {
-      localStorage.setItem(NOTIF_STORAGE_KEY, JSON.stringify(notifications));
-    } catch {}
-  }, [notifications]);
+    if (userNotifStorageKey) {
+      try {
+        localStorage.setItem(userNotifStorageKey, JSON.stringify(notifications));
+      } catch {}
+    }
+  }, [notifications, userNotifStorageKey]);
 
   // Listen to custom system notification events (from live chat, order updates, etc.)
   React.useEffect(() => {
@@ -184,35 +206,6 @@ export function NotificationBell() {
               });
             }
           });
-        } else if (!isAuthenticated) {
-          // If guest, check stored ticket ID
-          const storedId = localStorage.getItem('tudongnro_active_ticket_id');
-          if (storedId) {
-            const res = await ticketsApi.getById(storedId);
-            if (!isSubscribed || !res.data) return;
-            const ticket = res.data;
-            const ticketId = (ticket.id || (ticket as any)._id)?.toString();
-            const adminMsgs = ticket.messages?.filter((m) => m.sender === 'ADMIN') || [];
-            if (adminMsgs.length > 0) {
-              const lastAdminMsg = adminMsgs[adminMsgs.length - 1];
-              const notifId = `reply_${ticketId}_${new Date(lastAdminMsg.createdAt).getTime()}`;
-
-              setNotifications((prev) => {
-                if (prev.some((n) => n.id === notifId || (n.ticketId === ticketId && n.content === lastAdminMsg.message))) return prev;
-                const newNotif: SystemNotification = {
-                  id: notifId,
-                  type: 'SUPPORT',
-                  title: `Kỹ thuật viên phản hồi [${ticket.ticketCode}]`,
-                  content: lastAdminMsg.message,
-                  createdAt: 'Vừa xong',
-                  isRead: false,
-                  link: '#support-widget',
-                  ticketId,
-                };
-                return [newNotif, ...prev].slice(0, 30);
-              });
-            }
-          }
         }
       } catch {}
     };
@@ -238,7 +231,7 @@ export function NotificationBell() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length;
+  const unreadCount = isAuthenticated ? notifications.filter((n) => !n.isRead).length : 0;
 
   const markAllAsRead = () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
@@ -246,9 +239,11 @@ export function NotificationBell() {
 
   const clearAllNotifications = () => {
     setNotifications([]);
-    try {
-      localStorage.removeItem(NOTIF_STORAGE_KEY);
-    } catch {}
+    if (userNotifStorageKey) {
+      try {
+        localStorage.removeItem(userNotifStorageKey);
+      } catch {}
+    }
   };
 
   const markAsRead = (id: string) => {
@@ -269,9 +264,9 @@ export function NotificationBell() {
     setIsOpen(false);
 
     if (n.link === '#support-widget' || (n.type === 'SUPPORT' && user?.role !== UserRole.ADMIN)) {
-      const targetTicketId = n.ticketId || (typeof window !== 'undefined' ? localStorage.getItem('tudongnro_active_ticket_id') : null);
-      if (targetTicketId && typeof window !== 'undefined') {
-        localStorage.setItem('tudongnro_active_ticket_id', targetTicketId);
+      const targetTicketId = n.ticketId || (userTicketStorageKey && typeof window !== 'undefined' ? localStorage.getItem(userTicketStorageKey) : null);
+      if (targetTicketId && userTicketStorageKey && typeof window !== 'undefined') {
+        localStorage.setItem(userTicketStorageKey, targetTicketId);
       }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
@@ -319,121 +314,147 @@ export function NotificationBell() {
 
       {isOpen && (
         <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-800 bg-[#0C111D]/95 backdrop-blur-xl p-3 shadow-2xl shadow-black/80 z-50 animate-in fade-in zoom-in-95">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5 px-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white uppercase tracking-wider">
-                Thông Báo
-              </span>
-              {unreadCount > 0 && (
-                <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] font-bold text-cyan-400 border border-cyan-500/30">
-                  {unreadCount} mới
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {unreadCount > 0 && (
-                <button
-                  onClick={markAllAsRead}
-                  className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
-                  title="Đánh dấu tất cả đã đọc"
-                >
-                  <CheckCheck className="h-3 w-3" /> Đã đọc
-                </button>
-              )}
-              {notifications.length > 0 && (
-                <button
-                  onClick={clearAllNotifications}
-                  className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
-                  title="Xóa tất cả thông báo"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/60 my-1 pr-1">
-            {notifications.length === 0 ? (
-              <div className="py-8 text-center text-xs text-slate-500 flex flex-col items-center justify-center gap-2">
-                <Bell className="h-6 w-6 text-slate-600 opacity-40" />
-                <p className="font-medium text-slate-400">Chưa có thông báo nào</p>
-                <p className="text-[10px] text-slate-600">
-                  Các phản hồi hỗ trợ và cập nhật đơn hàng sẽ xuất hiện tại đây.
+          {!isAuthenticated ? (
+            <div className="py-6 px-4 text-center space-y-3">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                <Bell className="h-6 w-6" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-white">Chưa Đăng Nhập</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">
+                  Vui lòng đăng nhập để xem thông báo tài khoản, đơn hàng và phản hồi kỹ thuật.
                 </p>
               </div>
-            ) : (
-              notifications.map((n) => (
-                <div
-                  key={n.id}
-                  onClick={() => handleNotificationClick(n)}
-                  className={`group relative flex items-start gap-2.5 sm:gap-3 p-2.5 rounded-xl transition-all cursor-pointer ${
-                    n.isRead
-                      ? 'bg-slate-900/30 hover:bg-slate-800/40 opacity-70 border border-transparent'
-                      : 'bg-slate-800/60 hover:bg-slate-800/80 border border-cyan-500/30 shadow-sm shadow-cyan-500/10'
-                  }`}
-                >
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${
-                      n.isRead
-                        ? 'bg-slate-800/60 border-slate-700/40 text-slate-400'
-                        : 'bg-slate-800 border-cyan-500/40 text-cyan-400'
-                    }`}
-                  >
-                    {getIcon(n.type)}
+              <Button
+                size="sm"
+                className="btn-gaming-primary text-xs font-bold w-full cursor-pointer"
+                onClick={() => {
+                  setIsOpen(false);
+                  router.push('/login');
+                }}
+              >
+                <LogIn className="h-3.5 w-3.5 mr-1.5" /> Đăng Nhập Ngay
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5 px-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    Thông Báo
+                  </span>
+                  {unreadCount > 0 && (
+                    <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] font-bold text-cyan-400 border border-cyan-500/30">
+                      {unreadCount} mới
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {unreadCount > 0 && (
+                    <button
+                      onClick={markAllAsRead}
+                      className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer"
+                      title="Đánh dấu tất cả đã đọc"
+                    >
+                      <CheckCheck className="h-3 w-3" /> Đã đọc
+                    </button>
+                  )}
+                  {notifications.length > 0 && (
+                    <button
+                      onClick={clearAllNotifications}
+                      className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-rose-400 transition-colors cursor-pointer"
+                      title="Xóa tất cả thông báo"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-800/60 my-1 pr-1">
+                {notifications.length === 0 ? (
+                  <div className="py-8 text-center text-xs text-slate-500 flex flex-col items-center justify-center gap-2">
+                    <Bell className="h-6 w-6 text-slate-600 opacity-40" />
+                    <p className="font-medium text-slate-400">Chưa có thông báo nào</p>
+                    <p className="text-[10px] text-slate-600">
+                      Các phản hồi hỗ trợ và cập nhật đơn hàng sẽ xuất hiện tại đây.
+                    </p>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1.5">
-                      <h4
-                        className={`text-xs truncate ${
-                          n.isRead ? 'font-medium text-slate-300' : 'font-bold text-white'
+                ) : (
+                  notifications.map((n) => (
+                    <div
+                      key={n.id}
+                      onClick={() => handleNotificationClick(n)}
+                      className={`group relative flex items-start gap-2.5 sm:gap-3 p-2.5 rounded-xl transition-all cursor-pointer ${
+                        n.isRead
+                          ? 'bg-slate-900/30 hover:bg-slate-800/40 opacity-70 border border-transparent'
+                          : 'bg-slate-800/60 hover:bg-slate-800/80 border border-cyan-500/30 shadow-sm shadow-cyan-500/10'
+                      }`}
+                    >
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${
+                          n.isRead
+                            ? 'bg-slate-800/60 border-slate-700/40 text-slate-400'
+                            : 'bg-slate-800 border-cyan-500/40 text-cyan-400'
                         }`}
                       >
-                        {n.title}
-                      </h4>
-                      {!n.isRead ? (
-                        <button
-                          type="button"
-                          onClick={(e) => toggleRead(n.id, e)}
-                          className="flex items-center gap-1 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 text-cyan-400 hover:text-cyan-300 px-1.5 py-0.5 text-[10px] font-bold border border-cyan-500/30 transition-all shrink-0 cursor-pointer shadow-sm"
-                          title="Click để bỏ cờ thông báo này (thành thông báo cũ)"
-                        >
-                          <Check className="h-2.5 w-2.5" />
-                          <span>Bỏ cờ</span>
-                        </button>
-                      ) : (
-                        <span className="text-[10px] text-slate-500 font-normal shrink-0">
-                          Đã đọc
-                        </span>
-                      )}
+                        {getIcon(n.type)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-1.5">
+                          <h4
+                            className={`text-xs truncate ${
+                              n.isRead ? 'font-medium text-slate-300' : 'font-bold text-white'
+                            }`}
+                          >
+                            {n.title}
+                          </h4>
+                          {!n.isRead ? (
+                            <button
+                              type="button"
+                              onClick={(e) => toggleRead(n.id, e)}
+                              className="flex items-center gap-1 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 text-cyan-400 hover:text-cyan-300 px-1.5 py-0.5 text-[10px] font-bold border border-cyan-500/30 transition-all shrink-0 cursor-pointer shadow-sm"
+                              title="Click để bỏ cờ thông báo này (thành thông báo cũ)"
+                            >
+                              <Check className="h-2.5 w-2.5" />
+                              <span>Bỏ cờ</span>
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-slate-500 font-normal shrink-0">
+                              Đã đọc
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">
+                          {n.content}
+                        </p>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                            <Clock className="h-2.5 w-2.5" /> {n.createdAt}
+                          </span>
+                          {n.link && (
+                            <span className="text-[10px] text-cyan-400 hover:underline font-medium">
+                              {n.link === '#support-widget' ? 'Mở chat →' : 'Xem chi tiết →'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">
-                      {n.content}
-                    </p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <Clock className="h-2.5 w-2.5" /> {n.createdAt}
-                      </span>
-                      {n.link && (
-                        <span className="text-[10px] text-cyan-400 hover:underline font-medium">
-                          {n.link === '#support-widget' ? 'Mở chat →' : 'Xem chi tiết →'}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+                  ))
+                )}
+              </div>
 
-          <div className="border-t border-slate-800/80 pt-2 text-center">
-            <Link
-              href="/status"
-              onClick={() => setIsOpen(false)}
-              className="text-[11px] text-slate-500 hover:text-cyan-400 transition-colors"
-            >
-              Kiểm tra trạng thái máy chủ tự động →
-            </Link>
-          </div>
+              <div className="border-t border-slate-800/80 pt-2 text-center">
+                <Link
+                  href="/status"
+                  onClick={() => setIsOpen(false)}
+                  className="text-[11px] text-slate-500 hover:text-cyan-400 transition-colors"
+                >
+                  Kiểm tra trạng thái máy chủ tự động →
+                </Link>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

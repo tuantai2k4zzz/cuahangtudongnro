@@ -26,10 +26,10 @@ export function MobileBottomNav() {
       isActive: pathname.startsWith('/tools'),
     },
     {
-      href: '/tools?tab=wishlist',
+      href: isAuthenticated ? '/tools?tab=wishlist' : '/login',
       label: 'Yêu Thích',
       icon: Heart,
-      badge: wishlistCount > 0 ? wishlistCount : undefined,
+      badge: isAuthenticated && wishlistCount > 0 ? wishlistCount : undefined,
       isActive: pathname.includes('tab=wishlist'),
     },
     {

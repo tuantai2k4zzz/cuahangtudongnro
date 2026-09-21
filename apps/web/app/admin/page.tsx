@@ -63,10 +63,21 @@ import {
 
 export default function AdminDashboardPage() {
   const router = useRouter();
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isLoading } = useAuth();
   const toast = useToast();
 
   const isAdmin = user?.role === UserRole.ADMIN;
+
+  React.useEffect(() => {
+    if (!isLoading && (!isAuthenticated || !isAdmin)) {
+      toast.showToast({
+        type: 'ERROR',
+        title: 'Truy cập bị từ chối',
+        message: 'Bạn cần đăng nhập bằng tài khoản Quản trị viên để truy cập trang này.',
+      });
+      router.replace('/login');
+    }
+  }, [isLoading, isAuthenticated, isAdmin, router, toast]);
 
   const [activeTab, setActiveTab] = React.useState<
     'OVERVIEW' | 'PRODUCTS' | 'ORDERS' | 'LICENSES' | 'CUSTOMERS' | 'TICKETS' | 'AUDIT_LOGS' | 'ANNOUNCEMENTS'
@@ -438,6 +449,17 @@ export default function AdminDashboardPage() {
       return matchSearch && matchStatus;
     });
   }, [supportTickets, ticketSearch, ticketStatusFilter]);
+
+  if (isLoading || !isAuthenticated || !isAdmin) {
+    return (
+      <div className="min-h-screen bg-[#07090E] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <RefreshCw className="h-8 w-8 text-cyan-400 animate-spin" />
+          <p className="text-xs text-slate-400">Đang xác thực quyền quản trị...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#07090E] text-slate-200 pb-24 pt-8">

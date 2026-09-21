@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   LayoutDashboard,
   KeyRound,
@@ -13,6 +13,7 @@ import {
   ExternalLink,
   ShieldCheck,
   Headphones,
+  Loader2,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
 import { SITE_CONFIG } from '@/lib/constants';
@@ -31,7 +32,29 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const { user } = useAuth();
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  React.useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/login');
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#080B12] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 text-cyan-400 animate-spin" />
+          <p className="text-xs text-slate-400">Đang tải bảng điều khiển...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   const displayName = user?.fullName || 'Thành Viên';
   const displayEmail = user?.email || 'member@tudongnro.com';

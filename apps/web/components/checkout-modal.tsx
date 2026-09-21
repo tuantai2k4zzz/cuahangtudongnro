@@ -152,42 +152,6 @@ export function CheckoutModal({
       const newKey = `NRO-${Math.random().toString(36).substring(2, 6).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}-2026`;
       setGeneratedKey(newKey);
 
-      // Save to localStorage for Customer Dashboard
-      try {
-        const orderData = {
-          _id: `ord_${Date.now()}`,
-          orderCode,
-          productName: product.name,
-          planName: selectedPlan.name,
-          amount: selectedPlan.price,
-          status: OrderStatus.PAID,
-          createdAt: new Date().toISOString(),
-          customerEmail: email,
-        };
-        const storedOrders = localStorage.getItem('tudongnro_orders_history');
-        const orders = storedOrders ? JSON.parse(storedOrders) : [];
-        orders.unshift(orderData);
-        localStorage.setItem('tudongnro_orders_history', JSON.stringify(orders));
-
-        const licenseData = {
-          _id: `lic_${Date.now()}`,
-          licenseKey: newKey,
-          productName: product.name,
-          planName: selectedPlan.name,
-          status: LicenseStatus.ACTIVE,
-          expiresAt:
-            selectedPlan.durationDays > 0
-              ? new Date(Date.now() + selectedPlan.durationDays * 86400000).toISOString()
-              : '2099-12-31T23:59:59.000Z',
-          hwid: null,
-          hwidResetCount: 0,
-        };
-        const storedLic = localStorage.getItem('tudongnro_purchased_licenses');
-        const licenses = storedLic ? JSON.parse(storedLic) : [];
-        licenses.unshift(licenseData);
-        localStorage.setItem('tudongnro_purchased_licenses', JSON.stringify(licenses));
-      } catch {}
-
       toast.success('Hệ thống đã nhận thanh toán và tự động cấp License Key!');
       setStep('SUCCESS');
     }, 1800);

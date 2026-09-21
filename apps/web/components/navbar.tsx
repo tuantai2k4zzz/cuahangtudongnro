@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Gamepad2,
   Menu,
@@ -25,11 +25,14 @@ import { Badge } from '@/components/ui/badge';
 import { NAV_LINKS } from '@/lib/constants';
 import { useAuth } from '@/contexts/auth-context';
 import { useWishlist } from '@/contexts/wishlist-context';
+import { useToast } from '@/contexts/toast-context';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { UserRole } from '@tudongnro/shared-types';
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const toast = useToast();
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = React.useState(false);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
@@ -98,18 +101,29 @@ export function Navbar() {
         {/* Right Actions: Notifications, Wishlist, User Auth */}
         <div className="hidden md:flex items-center gap-3">
           {/* Wishlist quick link */}
-          <Link
-            href="/tools?tab=wishlist"
+          <button
+            onClick={() => {
+              if (!isAuthenticated) {
+                toast.showToast({
+                  type: 'WARNING',
+                  title: 'Yêu cầu đăng nhập',
+                  message: 'Vui lòng đăng nhập để xem danh sách sản phẩm yêu thích của bạn.',
+                });
+                router.push('/login');
+              } else {
+                router.push('/tools?tab=wishlist');
+              }
+            }}
             aria-label="Sản phẩm yêu thích"
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/90 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-400 hover:bg-slate-800 transition-all"
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/90 text-slate-300 hover:border-cyan-500/50 hover:text-cyan-400 hover:bg-slate-800 transition-all cursor-pointer"
           >
             <Heart className="h-4 w-4" />
-            {wishlistCount > 0 && (
+            {isAuthenticated && wishlistCount > 0 && (
               <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-cyan-500 px-1 text-[9px] font-black text-slate-950 shadow-md shadow-cyan-500/50">
                 {wishlistCount}
               </span>
             )}
-          </Link>
+          </button>
 
           {/* System Notification Bell */}
           <NotificationBell />
