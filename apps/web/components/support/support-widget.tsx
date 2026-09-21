@@ -72,11 +72,6 @@ export function SupportWidget() {
     return userId ? `tudongnro_active_ticket_${userId}` : null;
   }, [userId]);
 
-  // If user is Admin, they manage tickets from /admin dashboard and do not need the floating customer widget
-  if (user?.role === 'ADMIN') {
-    return null;
-  }
-
   // Polling / fetching ticket messages from backend
   const syncTicket = React.useCallback(
     async (ticketId: string, isSilent = false) => {
@@ -345,6 +340,11 @@ export function SupportWidget() {
     setInputText(`Tôi cần hỗ trợ kiểm tra đơn hàng mã: ${code}`);
     toast.info(`Đã điền mã đơn hàng ${code} vào tin nhắn`);
   };
+
+  // If user is Admin, they manage tickets from /admin dashboard and do not need the floating customer widget
+  if (user?.role === 'ADMIN') {
+    return null;
+  }
 
   return (
     <>
