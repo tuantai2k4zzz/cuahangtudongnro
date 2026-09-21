@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Bell,
+  Check,
   CheckCheck,
   Package,
   KeyRound,
@@ -69,8 +70,9 @@ export function NotificationBell() {
         title: customEvent.detail.title || 'Thông báo mới',
         content: customEvent.detail.content || '',
         createdAt: customEvent.detail.createdAt || 'Vừa xong',
-        isRead: false,
+        isRead: customEvent.detail.isRead ?? false,
         link: customEvent.detail.link,
+        ticketId: customEvent.detail.ticketId,
       };
 
       setNotifications((prev) => {
@@ -85,6 +87,25 @@ export function NotificationBell() {
 
     window.addEventListener('add-system-notification', handleSystemNotification);
     return () => window.removeEventListener('add-system-notification', handleSystemNotification);
+  }, []);
+
+  // Listen to chat opened event: mark all support/chat notifications as read immediately
+  React.useEffect(() => {
+    const handleSupportChatOpened = (event: Event) => {
+      const customEvent = event as CustomEvent<{ ticketId?: string }>;
+      const ticketId = customEvent.detail?.ticketId;
+      setNotifications((prev) =>
+        prev.map((n) => {
+          if (n.type === 'SUPPORT' || (ticketId && n.ticketId === ticketId)) {
+            return { ...n, isRead: true };
+          }
+          return n;
+        })
+      );
+    };
+
+    window.addEventListener('support-chat-opened', handleSupportChatOpened);
+    return () => window.removeEventListener('support-chat-opened', handleSupportChatOpened);
   }, []);
 
   // Periodic check for Admin: notify about open tickets
@@ -141,14 +162,14 @@ export function NotificationBell() {
           if (!isSubscribed || !res.data) return;
 
           res.data.forEach((ticket) => {
-            const ticketId = ticket.id || (ticket as any)._id;
+            const ticketId = (ticket.id || (ticket as any)._id)?.toString();
             const adminMsgs = ticket.messages?.filter((m) => m.sender === 'ADMIN') || [];
             if (adminMsgs.length > 0) {
               const lastAdminMsg = adminMsgs[adminMsgs.length - 1];
               const notifId = `reply_${ticketId}_${new Date(lastAdminMsg.createdAt).getTime()}`;
 
               setNotifications((prev) => {
-                if (prev.some((n) => n.id === notifId)) return prev;
+                if (prev.some((n) => n.id === notifId || (n.ticketId === ticketId && n.content === lastAdminMsg.message))) return prev;
                 const newNotif: SystemNotification = {
                   id: notifId,
                   type: 'SUPPORT',
@@ -170,14 +191,14 @@ export function NotificationBell() {
             const res = await ticketsApi.getById(storedId);
             if (!isSubscribed || !res.data) return;
             const ticket = res.data;
-            const ticketId = ticket.id || (ticket as any)._id;
+            const ticketId = (ticket.id || (ticket as any)._id)?.toString();
             const adminMsgs = ticket.messages?.filter((m) => m.sender === 'ADMIN') || [];
             if (adminMsgs.length > 0) {
               const lastAdminMsg = adminMsgs[adminMsgs.length - 1];
               const notifId = `reply_${ticketId}_${new Date(lastAdminMsg.createdAt).getTime()}`;
 
               setNotifications((prev) => {
-                if (prev.some((n) => n.id === notifId)) return prev;
+                if (prev.some((n) => n.id === notifId || (n.ticketId === ticketId && n.content === lastAdminMsg.message))) return prev;
                 const newNotif: SystemNotification = {
                   id: notifId,
                   type: 'SUPPORT',
@@ -233,6 +254,13 @@ export function NotificationBell() {
   const markAsRead = (id: string) => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+    );
+  };
+
+  const toggleRead = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, isRead: !n.isRead } : n))
     );
   };
 
@@ -338,20 +366,44 @@ export function NotificationBell() {
                 <div
                   key={n.id}
                   onClick={() => handleNotificationClick(n)}
-                  className={`flex items-start gap-3 p-2.5 rounded-xl transition-all cursor-pointer ${
+                  className={`group relative flex items-start gap-2.5 sm:gap-3 p-2.5 rounded-xl transition-all cursor-pointer ${
                     n.isRead
-                      ? 'hover:bg-slate-800/30 opacity-70'
-                      : 'bg-slate-800/40 hover:bg-slate-800/70 border border-slate-700/30'
+                      ? 'bg-slate-900/30 hover:bg-slate-800/40 opacity-70 border border-transparent'
+                      : 'bg-slate-800/60 hover:bg-slate-800/80 border border-cyan-500/30 shadow-sm shadow-cyan-500/10'
                   }`}
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-800/90 border border-slate-700/60">
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border ${
+                      n.isRead
+                        ? 'bg-slate-800/60 border-slate-700/40 text-slate-400'
+                        : 'bg-slate-800 border-cyan-500/40 text-cyan-400'
+                    }`}
+                  >
                     {getIcon(n.type)}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-1">
-                      <h4 className="text-xs font-semibold text-white truncate">{n.title}</h4>
-                      {!n.isRead && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 shrink-0 shadow-[0_0_8px_#22d3ee]" />
+                    <div className="flex items-center justify-between gap-1.5">
+                      <h4
+                        className={`text-xs truncate ${
+                          n.isRead ? 'font-medium text-slate-300' : 'font-bold text-white'
+                        }`}
+                      >
+                        {n.title}
+                      </h4>
+                      {!n.isRead ? (
+                        <button
+                          type="button"
+                          onClick={(e) => toggleRead(n.id, e)}
+                          className="flex items-center gap-1 rounded-md bg-cyan-500/15 hover:bg-cyan-500/25 active:scale-95 text-cyan-400 hover:text-cyan-300 px-1.5 py-0.5 text-[10px] font-bold border border-cyan-500/30 transition-all shrink-0 cursor-pointer shadow-sm"
+                          title="Click để bỏ cờ thông báo này (thành thông báo cũ)"
+                        >
+                          <Check className="h-2.5 w-2.5" />
+                          <span>Bỏ cờ</span>
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 font-normal shrink-0">
+                          Đã đọc
+                        </span>
                       )}
                     </div>
                     <p className="text-[11px] text-slate-400 line-clamp-2 mt-0.5 leading-snug">

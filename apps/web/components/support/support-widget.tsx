@@ -90,17 +90,18 @@ export function SupportWidget() {
                 message: newAdminMsg.message,
               });
 
-              // Dispatch notification to system notification bell
+              // Dispatch notification to system notification bell (mark as read immediately if chat is already open)
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(
                   new CustomEvent('add-system-notification', {
                     detail: {
-                      id: `reply_${ticketData.id || (ticketData as any)._id}_${new Date(newAdminMsg.createdAt).getTime()}`,
+                      id: `reply_${(ticketData.id || (ticketData as any)._id)?.toString()}_${new Date(newAdminMsg.createdAt).getTime()}`,
                       title: `Kỹ thuật viên đã phản hồi [${ticketData.ticketCode}]`,
                       content: newAdminMsg.message,
                       type: 'SUPPORT',
                       link: '#support-widget',
-                      ticketId: ticketData.id || (ticketData as any)._id,
+                      ticketId: (ticketData.id || (ticketData as any)._id)?.toString(),
+                      isRead: isOpen,
                     },
                   })
                 );
@@ -109,6 +110,8 @@ export function SupportWidget() {
 
             if (!isOpen) {
               setUnreadCount((prev) => prev + 1);
+            } else {
+              setUnreadCount(0);
             }
           }
         }
@@ -184,6 +187,20 @@ export function SupportWidget() {
     window.addEventListener('open-support-widget', handleOpen);
     return () => window.removeEventListener('open-support-widget', handleOpen);
   }, [isAuthenticated, user, syncTicket]);
+
+  // When chat opens, reset unread count and notify bell to mark all chat/support notifications as read
+  React.useEffect(() => {
+    if (isOpen) {
+      setUnreadCount(0);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('support-chat-opened', {
+            detail: { ticketId: currentTicketId },
+          })
+        );
+      }
+    }
+  }, [isOpen, currentTicketId]);
 
   // Time-based greeting
   const greeting = React.useMemo(() => {

@@ -15,6 +15,7 @@ import {
   Zap,
   Wallet,
   Coins,
+  ExternalLink,
 } from 'lucide-react';
 import { Modal } from '@/components/ui/modal';
 import { Button } from '@/components/ui/button';
@@ -401,7 +402,7 @@ export function CheckoutModal({
 
       {step === 'PAYMENT' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
             {/* QR Image Box */}
             <div className="flex flex-col items-center justify-center p-3 rounded-2xl border border-cyan-500/30 bg-[#0C1220] space-y-2">
               <div className="p-2 rounded-xl bg-white shadow-xl">
@@ -409,16 +410,26 @@ export function CheckoutModal({
                 <img
                   src={qrImageUrl}
                   alt="VietQR Payment"
-                  className="w-48 h-48 sm:w-52 sm:h-52 object-contain"
+                  className="w-40 h-40 sm:w-48 sm:h-48 object-contain"
                 />
               </div>
-              <span className="text-[10px] text-slate-400 text-center font-medium">
-                Mở app ngân hàng quét mã để thanh toán tự động
-              </span>
+              <div className="text-center space-y-1">
+                <span className="text-[11px] text-slate-300 font-medium block">
+                  Quét mã để chuyển khoản tự động
+                </span>
+                <a
+                  href={qrImageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[10px] text-cyan-400 hover:text-cyan-300 underline font-semibold cursor-pointer"
+                >
+                  <ExternalLink className="h-3 w-3" /> Mở ảnh QR để lưu vào máy
+                </a>
+              </div>
             </div>
 
             {/* Bank details info */}
-            <div className="space-y-2.5 text-xs">
+            <div className="space-y-2 text-xs">
               <div className="p-3 rounded-xl border border-slate-800 bg-slate-900/80 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Ngân hàng:</span>
@@ -426,7 +437,7 @@ export function CheckoutModal({
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Chủ tài khoản:</span>
-                  <span className="font-bold text-white uppercase">{SITE_CONFIG.vietqrConfig.accountHolder}</span>
+                  <span className="font-bold text-white uppercase truncate ml-2">{SITE_CONFIG.vietqrConfig.accountHolder}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400">Số tài khoản:</span>
@@ -434,7 +445,8 @@ export function CheckoutModal({
                     <span className="font-mono font-bold text-cyan-400">{SITE_CONFIG.vietqrConfig.accountNumber}</span>
                     <button
                       onClick={() => copyToClipboard(SITE_CONFIG.vietqrConfig.accountNumber, 'Số tài khoản')}
-                      className="text-slate-400 hover:text-white cursor-pointer"
+                      className="p-1 text-slate-400 hover:text-white active:scale-95 transition-transform cursor-pointer"
+                      title="Sao chép STK"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
@@ -446,7 +458,8 @@ export function CheckoutModal({
                     <span className="font-mono font-bold text-emerald-400">{formatCurrencyVND(selectedPlan.price)}</span>
                     <button
                       onClick={() => copyToClipboard(selectedPlan.price.toString(), 'Số tiền')}
-                      className="text-slate-400 hover:text-white cursor-pointer"
+                      className="p-1 text-slate-400 hover:text-white active:scale-95 transition-transform cursor-pointer"
+                      title="Sao chép số tiền"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
@@ -458,7 +471,8 @@ export function CheckoutModal({
                     <span className="font-mono font-black text-amber-400">{orderCode}</span>
                     <button
                       onClick={() => copyToClipboard(orderCode, 'Nội dung chuyển khoản')}
-                      className="text-slate-400 hover:text-white cursor-pointer"
+                      className="p-1 text-slate-400 hover:text-white active:scale-95 transition-transform cursor-pointer"
+                      title="Sao chép nội dung"
                     >
                       <Copy className="h-3.5 w-3.5" />
                     </button>
@@ -469,18 +483,18 @@ export function CheckoutModal({
               <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-2.5 text-[11px] text-amber-300 flex items-start gap-2">
                 <ShieldAlert className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
                 <span>
-                  <strong>Lưu ý quan trọng</strong>: Vui lòng giữ nguyên nội dung chuyển khoản là <strong>{orderCode}</strong> để hệ thống tự động cộng key.
+                  <strong>Lưu ý quan trọng</strong>: Giữ đúng nội dung <strong>{orderCode}</strong> để được duyệt tự động.
                 </span>
               </div>
             </div>
           </div>
 
-          <div className="pt-3 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <div className="pt-3 border-t border-slate-800 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setStep('SELECT')}
-              className="text-slate-400 hover:text-white"
+              className="text-slate-400 hover:text-white text-xs w-full sm:w-auto"
             >
               ← Quay lại chọn gói
             </Button>
@@ -488,7 +502,7 @@ export function CheckoutModal({
               size="lg"
               isLoading={isVerifying}
               onClick={handleSimulatePayment}
-              className="btn-gaming-primary w-full sm:w-auto text-xs font-bold gap-2"
+              className="btn-gaming-primary w-full sm:w-auto text-xs font-bold gap-2 py-3"
             >
               <Zap className="h-4 w-4" /> Tôi Đã Chuyển Tiền (Xác Nhận Ngay)
             </Button>
