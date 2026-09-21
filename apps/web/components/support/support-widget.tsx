@@ -27,7 +27,7 @@ import { useToast } from '@/contexts/toast-context';
 import { useRouter } from 'next/navigation';
 import { ticketsApi } from '@/lib/api-client';
 import { ISupportTicket, TicketCategory, TicketStatus } from '@tudongnro/shared-types';
-import { formatDate } from '@/lib/utils';
+import { formatDate, playNotificationSound } from '@/lib/utils';
 
 const FAQS = [
   {
@@ -88,6 +88,7 @@ export function SupportWidget() {
             lastAdminMsgCountRef.current = adminMsgs.length;
 
             if (!isSilent) {
+              playNotificationSound();
               toast.showToast({
                 type: 'SUCCESS',
                 title: 'Kỹ thuật viên phản hồi',

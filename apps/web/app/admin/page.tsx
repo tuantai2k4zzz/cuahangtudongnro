@@ -241,11 +241,79 @@ export default function AdminDashboardPage() {
     if (activeTab === 'AUDIT_LOGS') fetchAuditLogs();
   }, [isAdmin, activeTab, fetchProducts, fetchOrders, fetchLicenses, fetchUsers, fetchTickets, fetchAuditLogs]);
 
+  const pendingTicketsCount = React.useMemo(() => {
+    return supportTickets.filter((t) => {
+      const msgs = t.messages || [];
+      if (msgs.length === 0) return false;
+      const last = msgs[msgs.length - 1];
+      return last.sender === 'USER' && t.status !== 'RESOLVED' && t.status !== 'CLOSED';
+    }).length;
+  }, [supportTickets]);
+
+  // Listen to select-ticket event or check URL query params
+  React.useEffect(() => {
+    if (!isAdmin) return;
+
+    const handleSelectTicketEvent = async (e: Event) => {
+      const customEvent = e as CustomEvent<{ ticketId?: string }>;
+      const ticketId = customEvent.detail?.ticketId;
+      if (!ticketId) return;
+      setActiveTab('TICKETS');
+      try {
+        const res = await ticketsApi.getById(ticketId);
+        if (res.data) {
+          setSelectedTicket(res.data);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('admin-ticket-read', { detail: { ticketId } })
+            );
+          }
+        }
+      } catch {}
+    };
+
+    window.addEventListener('admin-select-ticket', handleSelectTicketEvent);
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const tabParam = params.get('tab');
+      const ticketIdParam = params.get('ticketId');
+      if (tabParam === 'TICKETS') {
+        setActiveTab('TICKETS');
+      }
+      if (ticketIdParam) {
+        ticketsApi.getById(ticketIdParam).then((res) => {
+          if (res.data) {
+            setSelectedTicket(res.data);
+            window.dispatchEvent(
+              new CustomEvent('admin-ticket-read', { detail: { ticketId: ticketIdParam } })
+            );
+          }
+        }).catch(() => {});
+      }
+    }
+
+    return () => window.removeEventListener('admin-select-ticket', handleSelectTicketEvent);
+  }, [isAdmin]);
+
+  // When selectedTicket changes to non-null, dispatch admin-ticket-read
+  React.useEffect(() => {
+    if (selectedTicket) {
+      const ticketId = selectedTicket.id || (selectedTicket as any)._id;
+      if (ticketId && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('admin-ticket-read', { detail: { ticketId } })
+        );
+      }
+    }
+  }, [selectedTicket]);
+
   // Auto-refresh tickets when on TICKETS tab or when ticket modal is open
   React.useEffect(() => {
     if (!isAdmin) return;
     if (activeTab !== 'TICKETS' && !selectedTicket) return;
 
+    const intervalTime = selectedTicket ? 2500 : 4000;
     const interval = setInterval(async () => {
       fetchTickets();
       if (selectedTicket) {
@@ -259,7 +327,7 @@ export default function AdminDashboardPage() {
           } catch {}
         }
       }
-    }, 5000);
+    }, intervalTime);
 
     return () => clearInterval(interval);
   }, [isAdmin, activeTab, selectedTicket, fetchTickets]);
@@ -525,10 +593,15 @@ export default function AdminDashboardPage() {
             { id: 'ORDERS', label: `Đơn Hàng (${ordersList.length})`, icon: DollarSign },
             { id: 'LICENSES', label: `Bản Quyền Key (${licensesList.length})`, icon: KeyRound },
             { id: 'CUSTOMERS', label: `Khách Hàng (${usersList.length})`, icon: Users },
-            { id: 'TICKETS', label: `Hỗ Trợ Khách Hàng (${supportTickets.length})`, icon: Headphones },
+            {
+              id: 'TICKETS',
+              label: `Hỗ Trợ Khách Hàng (${supportTickets.length})`,
+              icon: Headphones,
+              badge: pendingTicketsCount > 0 ? `${pendingTicketsCount} mới` : null,
+            },
             { id: 'AUDIT_LOGS', label: 'Lịch Sử Kiểm Toán (Audit)', icon: Activity },
             { id: 'ANNOUNCEMENTS', label: 'Banner & Thông Báo', icon: BellRing },
-          ].map((tab) => {
+          ].map((tab: any) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -543,6 +616,11 @@ export default function AdminDashboardPage() {
               >
                 <Icon className="h-3.5 w-3.5" />
                 <span>{tab.label}</span>
+                {tab.badge && (
+                  <span className="rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40 px-1.5 py-0.2 text-[9px] font-black animate-pulse">
+                    {tab.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -1192,52 +1270,90 @@ export default function AdminDashboardPage() {
             <Card className="border-slate-800 bg-[#0C1019] overflow-hidden">
               {filteredTickets.length > 0 ? (
                 <div className="divide-y divide-slate-800">
-                  {filteredTickets.map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-slate-900/30 transition-colors"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-xs text-cyan-400">
-                            {ticket.ticketCode}
-                          </span>
-                          <Badge
-                            className={`text-[10px] ${
-                              ticket.status === 'OPEN'
-                                ? 'bg-amber-500/20 text-amber-300'
-                                : ticket.status === 'IN_PROGRESS'
-                                ? 'bg-cyan-500/20 text-cyan-300'
-                                : 'bg-emerald-500/20 text-emerald-300'
+                  {filteredTickets.map((ticket) => {
+                    const messages = ticket.messages || [];
+                    const lastMsg = messages[messages.length - 1];
+                    const isWaitingAdmin =
+                      lastMsg?.sender === 'USER' &&
+                      ticket.status !== 'RESOLVED' &&
+                      ticket.status !== 'CLOSED';
+
+                    return (
+                      <div
+                        key={ticket.id}
+                        className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors ${
+                          isWaitingAdmin
+                            ? 'bg-rose-950/20 hover:bg-rose-950/30 border-l-4 border-l-rose-500'
+                            : 'hover:bg-slate-900/30'
+                        }`}
+                      >
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono font-bold text-xs text-cyan-400">
+                              {ticket.ticketCode}
+                            </span>
+                            <Badge
+                              className={`text-[10px] ${
+                                ticket.status === 'OPEN'
+                                  ? 'bg-amber-500/20 text-amber-300'
+                                  : ticket.status === 'IN_PROGRESS'
+                                  ? 'bg-cyan-500/20 text-cyan-300'
+                                  : 'bg-emerald-500/20 text-emerald-300'
+                              }`}
+                            >
+                              {ticket.status}
+                            </Badge>
+                            <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-800">
+                              {ticket.category}
+                            </Badge>
+                            {isWaitingAdmin && (
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-rose-500/20 border border-rose-500/50 px-2 py-0.5 text-[10px] font-bold text-rose-300 animate-pulse">
+                                <span className="h-1.5 w-1.5 rounded-full bg-rose-400 animate-ping"></span>
+                                Khách vừa gửi tin nhắn
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs font-bold text-white">{ticket.subject}</div>
+
+                          {/* Last message preview */}
+                          {lastMsg && (
+                            <div className="text-[11px] text-slate-300 line-clamp-1 bg-slate-900/70 p-2 rounded-lg border border-slate-800 flex items-center gap-2">
+                              <span className="font-bold text-cyan-400 shrink-0">
+                                {lastMsg.sender === 'ADMIN' ? 'Admin:' : `${ticket.customerName}:`}
+                              </span>
+                              <span className="truncate">{lastMsg.message}</span>
+                              <span className="text-[10px] text-slate-500 ml-auto shrink-0">
+                                {formatDate(lastMsg.createdAt)}
+                              </span>
+                            </div>
+                          )}
+
+                          <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-3">
+                            <span>Khách: {ticket.customerName} ({ticket.customerEmail})</span>
+                            {ticket.orderCode && (
+                              <span className="text-cyan-400 font-mono">Đơn: {ticket.orderCode}</span>
+                            )}
+                            <span>Khởi tạo: {formatDate(ticket.createdAt)}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button
+                            size="sm"
+                            onClick={() => setSelectedTicket(ticket)}
+                            className={`h-8 px-3 text-xs font-bold ${
+                              isWaitingAdmin
+                                ? 'bg-gradient-to-r from-rose-500 to-red-600 text-white shadow-lg shadow-rose-500/30 hover:brightness-110'
+                                : 'btn-gaming-primary'
                             }`}
                           >
-                            {ticket.status}
-                          </Badge>
-                          <Badge variant="outline" className="text-[10px] text-slate-400 border-slate-800">
-                            {ticket.category}
-                          </Badge>
-                        </div>
-                        <div className="text-xs font-bold text-white">{ticket.subject}</div>
-                        <div className="text-[11px] text-slate-400 flex items-center gap-3">
-                          <span>Khách: {ticket.customerName} ({ticket.customerEmail})</span>
-                          {ticket.orderCode && (
-                            <span className="text-cyan-400 font-mono">Đơn: {ticket.orderCode}</span>
-                          )}
-                          <span>{formatDate(ticket.createdAt)}</span>
+                            <Headphones className="h-3.5 w-3.5 mr-1" />
+                            {isWaitingAdmin ? 'Trả Lời Ngay' : 'Xem Hội Thoại'} ({messages.length})
+                          </Button>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => setSelectedTicket(ticket)}
-                          className="h-8 px-3 btn-gaming-primary text-xs font-bold"
-                        >
-                          <Headphones className="h-3.5 w-3.5 mr-1" /> Trả Lời ({ticket.messages?.length || 0})
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="p-8 text-center space-y-3">

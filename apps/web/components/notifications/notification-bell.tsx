@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/auth-context';
 import { ticketsApi } from '@/lib/api-client';
 import { UserRole } from '@tudongnro/shared-types';
+import { playNotificationSound } from '@/lib/utils';
 
 export interface SystemNotification {
   id: string;
@@ -130,42 +131,77 @@ export function NotificationBell() {
     return () => window.removeEventListener('support-chat-opened', handleSupportChatOpened);
   }, []);
 
-  // Periodic check for Admin: notify about open tickets
+  // Listen to admin ticket read event: mark all notifications for that ticket as read
+  React.useEffect(() => {
+    const handleAdminTicketRead = (event: Event) => {
+      const customEvent = event as CustomEvent<{ ticketId?: string }>;
+      const ticketId = customEvent.detail?.ticketId;
+      if (!ticketId) return;
+      setNotifications((prev) =>
+        prev.map((n) => {
+          if (n.ticketId === ticketId) {
+            return { ...n, isRead: true };
+          }
+          return n;
+        })
+      );
+    };
+
+    window.addEventListener('admin-ticket-read', handleAdminTicketRead);
+    return () => window.removeEventListener('admin-ticket-read', handleAdminTicketRead);
+  }, []);
+
+  // Periodic check for Admin: notify about open tickets and any customer messages
   React.useEffect(() => {
     if (!isAuthenticated || user?.role !== UserRole.ADMIN) return;
 
     let isSubscribed = true;
     const checkAdminTickets = async () => {
       try {
-        const res = await ticketsApi.getAllAdmin({ status: 'OPEN' });
+        const res = await ticketsApi.getAllAdmin();
         if (!isSubscribed || !res.data) return;
 
-        const openTickets = res.data;
-        if (openTickets.length > 0) {
-          const latest = openTickets[0];
-          const ticketId = latest.id || (latest as any)._id;
-          const notifId = `ticket_open_${ticketId}`;
+        const tickets = res.data;
+        let hasNewMsg = false;
 
-          setNotifications((prev) => {
-            if (prev.some((n) => n.id === notifId)) return prev;
-            const newNotif: SystemNotification = {
-              id: notifId,
-              type: 'SUPPORT',
-              title: `Yêu cầu hỗ trợ mới [${latest.ticketCode}]`,
-              content: `${latest.customerName}: ${latest.subject}`,
-              createdAt: 'Cần hỗ trợ',
-              isRead: false,
-              link: '/admin',
-              ticketId,
-            };
-            return [newNotif, ...prev].slice(0, 30);
-          });
+        tickets.forEach((ticket) => {
+          const ticketId = (ticket.id || (ticket as any)._id)?.toString();
+          if (!ticketId) return;
+
+          const messages = ticket.messages || [];
+          if (messages.length === 0) return;
+
+          const lastMsg = messages[messages.length - 1];
+          // If the last message is from customer and ticket is not closed/resolved
+          if (lastMsg.sender === 'USER' && ticket.status !== 'CLOSED' && ticket.status !== 'RESOLVED') {
+            const notifId = `admin_msg_${ticketId}_${new Date(lastMsg.createdAt).getTime()}`;
+
+            setNotifications((prev) => {
+              if (prev.some((n) => n.id === notifId)) return prev;
+              hasNewMsg = true;
+              const newNotif: SystemNotification = {
+                id: notifId,
+                type: 'SUPPORT',
+                title: `Tin nhắn hỗ trợ từ ${ticket.customerName} [${ticket.ticketCode}]`,
+                content: lastMsg.message,
+                createdAt: 'Vừa xong',
+                isRead: false,
+                link: `/admin?tab=TICKETS&ticketId=${ticketId}`,
+                ticketId,
+              };
+              return [newNotif, ...prev].slice(0, 30);
+            });
+          }
+        });
+
+        if (hasNewMsg) {
+          playNotificationSound();
         }
       } catch {}
     };
 
     checkAdminTickets();
-    const interval = setInterval(checkAdminTickets, 10000);
+    const interval = setInterval(checkAdminTickets, 3500);
     return () => {
       isSubscribed = false;
       clearInterval(interval);
@@ -174,44 +210,49 @@ export function NotificationBell() {
 
   // Periodic check for Customer: notify about Admin replies to tickets
   React.useEffect(() => {
+    if (!isAuthenticated || user?.role === UserRole.ADMIN) return;
     let isSubscribed = true;
 
     const checkCustomerTickets = async () => {
       try {
-        // If logged in customer
-        if (isAuthenticated && user?.role !== UserRole.ADMIN) {
-          const res = await ticketsApi.getMyTickets();
-          if (!isSubscribed || !res.data) return;
+        const res = await ticketsApi.getMyTickets();
+        if (!isSubscribed || !res.data) return;
 
-          res.data.forEach((ticket) => {
-            const ticketId = (ticket.id || (ticket as any)._id)?.toString();
-            const adminMsgs = ticket.messages?.filter((m) => m.sender === 'ADMIN') || [];
-            if (adminMsgs.length > 0) {
-              const lastAdminMsg = adminMsgs[adminMsgs.length - 1];
-              const notifId = `reply_${ticketId}_${new Date(lastAdminMsg.createdAt).getTime()}`;
+        let hasNewReply = false;
+        res.data.forEach((ticket) => {
+          const ticketId = (ticket.id || (ticket as any)._id)?.toString();
+          if (!ticketId) return;
+          const adminMsgs = ticket.messages?.filter((m) => m.sender === 'ADMIN') || [];
+          if (adminMsgs.length > 0) {
+            const lastAdminMsg = adminMsgs[adminMsgs.length - 1];
+            const notifId = `reply_${ticketId}_${new Date(lastAdminMsg.createdAt).getTime()}`;
 
-              setNotifications((prev) => {
-                if (prev.some((n) => n.id === notifId || (n.ticketId === ticketId && n.content === lastAdminMsg.message))) return prev;
-                const newNotif: SystemNotification = {
-                  id: notifId,
-                  type: 'SUPPORT',
-                  title: `Kỹ thuật viên phản hồi [${ticket.ticketCode}]`,
-                  content: lastAdminMsg.message,
-                  createdAt: 'Vừa xong',
-                  isRead: false,
-                  link: '#support-widget',
-                  ticketId,
-                };
-                return [newNotif, ...prev].slice(0, 30);
-              });
-            }
-          });
+            setNotifications((prev) => {
+              if (prev.some((n) => n.id === notifId || (n.ticketId === ticketId && n.content === lastAdminMsg.message))) return prev;
+              hasNewReply = true;
+              const newNotif: SystemNotification = {
+                id: notifId,
+                type: 'SUPPORT',
+                title: `Kỹ thuật viên phản hồi [${ticket.ticketCode}]`,
+                content: lastAdminMsg.message,
+                createdAt: 'Vừa xong',
+                isRead: false,
+                link: '#support-widget',
+                ticketId,
+              };
+              return [newNotif, ...prev].slice(0, 30);
+            });
+          }
+        });
+
+        if (hasNewReply) {
+          playNotificationSound();
         }
       } catch {}
     };
 
     checkCustomerTickets();
-    const interval = setInterval(checkCustomerTickets, 6000);
+    const interval = setInterval(checkCustomerTickets, 3500);
     return () => {
       isSubscribed = false;
       clearInterval(interval);
@@ -277,6 +318,13 @@ export function NotificationBell() {
       }
     } else if (n.link) {
       router.push(n.link);
+      if (user?.role === UserRole.ADMIN && n.ticketId && typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('admin-select-ticket', {
+            detail: { ticketId: n.ticketId },
+          })
+        );
+      }
     }
   };
 
